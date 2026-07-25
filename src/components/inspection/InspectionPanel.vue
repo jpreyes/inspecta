@@ -3,8 +3,8 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { Trash2, X, Plus } from 'lucide-vue-next'
 import { useInspectionStore } from '../../stores/inspection'
-import { damageIcon } from '../../ui/icons'
-import { DAMAGE_TYPES, SEVERITY, findingIndex } from '../../types/inspection'
+import { iconForDamage } from '../../ui/icons'
+import { SEVERITY, findingIndex } from '../../types/inspection'
 
 const store = useInspectionStore()
 const { selectedElement, selectedElementFindings, currentFindings, activeInspection } =
@@ -54,8 +54,8 @@ function register() {
       <div v-for="f in list" :key="f.id" class="mb-2 rounded-lg border border-ink-800 bg-ink-850 p-3">
         <div class="flex items-start justify-between">
           <div class="flex items-center gap-2">
-            <component :is="damageIcon[f.damageType]" :size="16" class="text-ink-300" />
-            <span class="text-sm font-medium text-ink-100">{{ DAMAGE_TYPES[f.damageType].label }}</span>
+            <component :is="iconForDamage(f.damageType)" :size="16" class="text-ink-300" />
+            <span class="text-sm font-medium text-ink-100">{{ f.damageType }}</span>
           </div>
           <span
             class="rounded px-1.5 py-0.5 text-[11px] font-semibold"

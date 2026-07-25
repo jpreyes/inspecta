@@ -2,6 +2,10 @@
 // Modelo de dominio · Inspecciones estructurales
 // Jerarquía:  Proyecto ▸ Estructura ▸ Elemento ▸ (Inspección ▸ Hallazgo)
 // ─────────────────────────────────────────────────────────────
+import { CATALOG, type CatalogElement, type StructureCatalog } from '../data/catalog'
+
+export { CATALOG, MATERIALS } from '../data/catalog'
+export type { CatalogElement, CatalogComponent, CatalogDamage, StructureCatalog } from '../data/catalog'
 
 /** Severidad 0–4, alineada con el gauge de estado de ReWind (wind-shm). */
 export type Severity = 0 | 1 | 2 | 3 | 4
@@ -21,95 +25,32 @@ export const SEVERITY: Record<Severity, SeverityMeta> = {
   4: { level: 4, label: 'Crítico', color: '#ef4444' },
 }
 
-/** Tipos de daño típicos en hormigón armado / acero. */
-export type DamageType =
-  | 'fisura'
-  | 'grieta'
-  | 'descascaramiento'
-  | 'corrosion'
-  | 'nido_piedra'
-  | 'eflorescencia'
-  | 'deflexion'
-  | 'armadura_expuesta'
-  | 'humedad'
-  | 'pandeo'
-  | 'otro'
+// ── Consulta del catálogo (por tipo de estructura) ──────────
+// El catálogo (componentes → elementos → materiales/zonas, deterioros, causas)
+// vive en src/data/catalog.ts. "Otro" en cada campo permite texto libre.
 
-export const DAMAGE_TYPES: Record<DamageType, { label: string }> = {
-  fisura: { label: 'Fisura' },
-  grieta: { label: 'Grieta' },
-  descascaramiento: { label: 'Descascaramiento' },
-  corrosion: { label: 'Corrosión' },
-  nido_piedra: { label: 'Nido de piedra' },
-  eflorescencia: { label: 'Eflorescencia' },
-  deflexion: { label: 'Deflexión' },
-  armadura_expuesta: { label: 'Armadura expuesta' },
-  humedad: { label: 'Humedad / filtración' },
-  pandeo: { label: 'Pandeo' },
-  otro: { label: 'Otro' },
+/** Catálogo aplicable al tipo de estructura (fallback: edificio). */
+export function catalogFor(type?: string): StructureCatalog {
+  return (type && CATALOG[type]) || CATALOG.edificio
 }
-
-/** Causa del daño (catálogo, como structapp-base). */
-export type DamageCause =
-  | 'estructural'
-  | 'deformacion'
-  | 'corrosion'
-  | 'filtracion'
-  | 'electrico'
-  | 'estetico'
-  | 'mantenimiento'
-  | 'otro'
-
-export const DAMAGE_CAUSES: Record<DamageCause, string> = {
-  estructural: 'Estructural',
-  deformacion: 'Deformación',
-  corrosion: 'Corrosión',
-  filtracion: 'Filtración',
-  electrico: 'Eléctrico',
-  estetico: 'Estético',
-  mantenimiento: 'Mantenimiento',
-  otro: 'Otra',
+/** Info (materiales + zonas) de un elemento del catálogo. */
+export function elementInfo(cat: StructureCatalog, element: string): CatalogElement | undefined {
+  for (const c of cat.components) {
+    const e = c.elements.find((x) => x.element === element)
+    if (e) return e
+  }
+  return undefined
 }
-
-// ── Catálogo de elementos y zonas (el "dónde" del daño) ──────
-// Elemento = tipo típico (dropdown). Zona = ubicación dentro del elemento,
-// dependiente del elemento. Ambos con "Otro" para escribir uno que no existe.
-
-export const ELEMENT_TYPES: string[] = [
-  'Viga',
-  'Columna',
-  'Losa',
-  'Muro',
-  'Tabique',
-  'Estribo',
-  'Tablero',
-  'Pila',
-  'Fundación',
-  'Nudo / Unión',
-  'Escalera',
-  'Cadena',
-  'Sobrecimiento',
-  'Otro',
-]
-
-/** Zonas típicas por elemento. La última opción siempre es "Otro" (texto libre). */
-export const ZONES_BY_ELEMENT: Record<string, string[]> = {
-  Viga: ['Centro de vano', 'Apoyo / extremo', 'Unión / nudo', 'Fondo de viga', 'Cara lateral', 'Otro'],
-  Columna: ['Base', 'Cabeza / capitel', 'Fuste / tercio central', 'Unión / nudo', 'Otro'],
-  Pila: ['Base', 'Fuste', 'Coronación', 'Otro'],
-  Losa: ['Centro de paño', 'Borde / perímetro', 'Cara inferior', 'Cara superior', 'Junta', 'Otro'],
-  Tablero: ['Centro de vano', 'Junta de dilatación', 'Cara inferior', 'Borde', 'Otro'],
-  Muro: ['Muro frontal', 'Muro lateral', 'Base', 'Coronación', 'Encuentro / esquina', 'Otro'],
-  Tabique: ['Paño central', 'Encuentro', 'Base', 'Otro'],
-  Estribo: ['Cuerpo', 'Coronación', 'Ala', 'Fundación', 'Otro'],
-  Fundación: ['Zapata', 'Viga de fundación', 'Sobrecimiento', 'Otro'],
-  'Nudo / Unión': ['Nudo viga-columna', 'Empalme', 'Conexión metálica', 'Otro'],
-  Escalera: ['Tramo', 'Descanso', 'Apoyo', 'Otro'],
+/** Deterioros aplicables a un material (o todos si no se indica). */
+export function damagesForMaterial(cat: StructureCatalog, material?: string) {
+  if (!material) return cat.damages
+  return cat.damages.filter(
+    (d) => d.materials.includes('todos') || d.materials.some((m) => material.includes(m) || m.includes(material)),
+  )
 }
-
-/** Zonas para un elemento dado (fallback = solo "Otro"). */
-export function zonesFor(element: string): string[] {
-  return ZONES_BY_ELEMENT[element] ?? ['Otro']
+/** Causas probables de un deterioro. */
+export function causesForDamage(cat: StructureCatalog, damage: string): string[] {
+  return cat.causesByDamage[damage] ?? []
 }
 
 export type ElementType = 'columna' | 'viga' | 'losa' | 'muro' | 'nudo' | 'fundacion'
@@ -182,15 +123,20 @@ export interface Photo {
 export interface Finding {
   id: string
   inspectionId: string
-  /** Tipo de elemento (catálogo, o texto libre si "Otro"). Ej. "Viga". */
+  /** Componente estructural (catálogo). Ej. "Vigas y cadenas". */
+  component?: string
+  /** Elemento (catálogo, o texto libre si "Otro"). Ej. "Viga". */
   element: string
-  /** Zona/ubicación dentro del elemento (catálogo por elemento, o libre). Ej. "Fondo de viga". */
+  /** Material del elemento (catálogo). Ej. "Hormigón armado". */
+  material?: string
+  /** Zona/ubicación dentro del elemento (catálogo, o libre). Ej. "Fondo de viga". */
   zone?: string
   /** Elemento del modelo 3D vinculado (opcional; para colorear el gemelo). */
   elementId?: string
-  damageType: DamageType
+  /** Tipo de daño / deterioro (catálogo). */
+  damageType: string
   /** Causa del daño (opcional). */
-  cause?: DamageCause
+  cause?: string
   severity: Severity
   /** extensión afectada del elemento, 0–100 % */
   extension: number
@@ -247,68 +193,170 @@ export function conditionFromScore(score: number): ConditionKey {
 
 const DEFAULT_WEIGHT = 1.0
 
-/** Peso por tipo de daño (mayor = más grave estructuralmente). */
-export const DAMAGE_TYPE_WEIGHT: Record<DamageType, number> = {
-  fisura: 0.95,
-  grieta: 1.25,
-  descascaramiento: 1.1,
-  corrosion: 1.2,
-  nido_piedra: 1.1,
-  eflorescencia: 0.85,
-  deflexion: 1.2,
-  armadura_expuesta: 1.35,
+/** Peso por tipo de daño/deterioro (mayor = más grave). Claves = nombres del
+ *  catálogo; desconocidos usan DEFAULT_WEIGHT. */
+export const DAMAGE_TYPE_WEIGHT: Record<string, number> = {
+  Fisuras: 0.95,
+  Grietas: 1.3,
+  'Grietas 5mm': 1.35,
+  'Fisuras en mapa o retícula': 1.0,
+  'Descascaramiento sin armadura a la vista': 1.1,
+  'Descascaramiento con armadura a la vista': 1.35,
+  'Armadura a la vista': 1.3,
+  'Corrosión de armaduras/acero': 1.25,
+  Corrosión: 1.2,
+  'Mancha de óxido': 1.0,
+  'Coqueras / nidos de grava': 1.1,
+  'Humedades / filtraciones': 1.0,
+  Humedades: 1.0,
+  Eflorescencias: 0.85,
+  'Deformación / flecha excesiva': 1.25,
+  Deformación: 1.25,
+  'Falta de alineación / desplome': 1.15,
+  'Falta de alineación': 1.15,
+  'Disgregación / pulverización': 1.15,
+  'Aplastamiento (albañilería)': 1.35,
+  'Pandeo local': 1.3,
+  Abolladura: 1.1,
+  'Pérdida de mortero de junta': 1.05,
+  'Pérdida de tratamiento protector': 0.9,
+  'Pudrición / xilófagos': 1.3,
+  'Deterioro de soldadura / conexión': 1.35,
+  'Pérdida / aflojamiento de pernos y anclajes': 1.3,
+  'Pérdida de tornillos roblones anclajes': 1.3,
+  Rotura: 1.35,
+  Desplazamiento: 1.2,
+  Descalce: 1.3,
+  Carcavas: 1.0,
+  Lajación: 1.0,
+  Aterramiento: 0.9,
+  'Alteración superficial': 0.85,
+  'Vegetación / biológico': 0.8,
+  Vegetación: 0.8,
+  Pintadas: 0.7,
+}
+
+/** Peso por causa. Claves = nombres del catálogo; desconocidas = DEFAULT_WEIGHT. */
+export const CAUSE_WEIGHT: Record<string, number> = {
+  'acción sísmica': 1.3,
+  'asiento diferencial': 1.2,
+  'sobrecarga gravitacional': 1.2,
+  sobrecarga: 1.15,
+  'sobrecarga (compresión)': 1.2,
+  'esfuerzos (corte)': 1.2,
+  'esfuerzos (flexión)': 1.15,
+  esfuerzos: 1.15,
+  'esfuerzos (compresión)': 1.15,
+  'corrosión de armaduras': 1.2,
+  corrosión: 1.15,
+  carbonatación: 1.15,
+  'ataque de cloruros': 1.15,
+  'ataque químico': 1.1,
+  'empuje de terreno': 1.15,
+  'deficiente diseño': 1.2,
+  infradimensionamiento: 1.2,
+  'infradimensionamiento del elemento': 1.2,
+  'deficiente ejecución': 1.05,
+  'escasez de recubrimiento': 1.1,
+  fatiga: 1.15,
+  'esfuerzos cíclicos': 1.1,
+  'humedad/filtración': 1.0,
   humedad: 1.0,
-  pandeo: 1.3,
-  otro: 1.0,
+  'impermeabilización defectuosa': 1.0,
+  envejecimiento: 0.9,
+  'acción climática': 0.9,
+  abrasión: 0.9,
+  vandalismo: 0.7,
+  'sedimentación orgánica': 0.8,
+  'causa desconocida': 1.0,
 }
 
-/** Peso por causa. */
-export const CAUSE_WEIGHT: Record<DamageCause, number> = {
-  estructural: 1.3,
-  deformacion: 1.15,
-  corrosion: 1.2,
-  filtracion: 1.05,
-  electrico: 1.0,
-  estetico: 0.85,
-  mantenimiento: 0.95,
-  otro: 1.0,
-}
-
-/** Peso por elemento (importancia estructural). */
+/** Peso por elemento (importancia estructural). Claves del catálogo. */
 export const ELEMENT_WEIGHT: Record<string, number> = {
-  Columna: 1.3,
-  Pila: 1.3,
-  Fundación: 1.3,
-  Estribo: 1.25,
-  'Nudo / Unión': 1.25,
-  Muro: 1.15,
-  Viga: 1.15,
-  Tablero: 1.15,
-  Losa: 1.1,
-  Sobrecimiento: 1.1,
+  // edificación
+  'Columna / Pilar': 1.3,
+  'Muro estructural / de corte': 1.2,
+  'Muro de albañilería confinada': 1.15,
+  'Muro de albañilería armada': 1.15,
+  Machón: 1.15,
+  Viga: 1.2,
   Cadena: 1.05,
-  Escalera: 1.0,
+  Dintel: 1.1,
+  Losa: 1.1,
+  'Losa colaborante': 1.1,
+  Vigueta: 1.05,
+  'Voladizo / balcón': 1.2,
+  'Nudo viga-columna': 1.3,
+  Anclaje: 1.25,
+  'Conexión soldada': 1.2,
+  'Conexión apernada': 1.2,
+  'Empalme de armadura': 1.15,
+  'Zapata aislada': 1.3,
+  'Zapata corrida': 1.25,
+  'Viga de fundación': 1.25,
+  'Losa de fundación (radier)': 1.15,
+  Pilote: 1.3,
+  'Cabezal de pilotes': 1.25,
+  Sobrecimiento: 1.1,
+  'Muro de subterráneo': 1.2,
+  Cercha: 1.2,
+  'Viga de techo': 1.1,
+  'Losa de escalera': 1.1,
+  'Zanca / viga de escalera': 1.1,
   Tabique: 0.9,
+  'Antepecho / parapeto': 0.9,
+  // puentes
+  Columnas: 1.3,
+  Fundación: 1.3,
+  Vigas: 1.2,
+  Longuerina: 1.2,
+  'Aparato de apoyo': 1.2,
+  'Cabezal superior': 1.2,
+  'Cabezal inferior': 1.2,
+  Diagonal: 1.1,
+  Montante: 1.1,
+  Voladizo: 1.2,
+  Contraventación: 1.1,
+  'Muro frontal portante': 1.2,
+  Alas: 1.0,
+  Guardalastres: 0.95,
+  'Anclaje de pretensado': 1.25,
+  'Anclaje / placa base': 1.2,
 }
 
 /** Peso por zona/ubicación dentro del elemento (zonas críticas > cosméticas). */
 export const ZONE_WEIGHT: Record<string, number> = {
   'Unión / nudo': 1.2,
+  Nudo: 1.2,
   'Nudo viga-columna': 1.25,
+  'Núcleo del nudo': 1.25,
   'Apoyo / extremo': 1.15,
+  'Apoyo/extremo': 1.15,
   Apoyo: 1.15,
   Base: 1.15,
   Empalme: 1.15,
+  'Anclaje / placa base': 1.2,
+  'Anclaje de pretensado': 1.2,
+  'Anclaje de conexión': 1.15,
+  'Placa base': 1.2,
+  'Perno de anclaje': 1.15,
+  'Cordón de soldadura': 1.2,
   'Conexión metálica': 1.2,
+  'Conexión de corte': 1.15,
+  'Cabeza/capitel': 1.15,
   'Cabeza / capitel': 1.15,
   'Fondo de viga': 1.1,
+  Empotramiento: 1.2,
   Zapata: 1.2,
   'Viga de fundación': 1.2,
   'Encuentro / esquina': 1.15,
+  'Encuentro/esquina': 1.15,
   Junta: 1.1,
   'Junta de dilatación': 1.1,
   'Borde / perímetro': 1.05,
+  'Borde/perímetro': 1.05,
   Coronación: 1.05,
+  Descalce: 1.2,
   'Cara lateral': 0.95,
   'Cara superior': 0.95,
 }
@@ -327,7 +375,7 @@ export function findingIndex(
 ): number {
   if (!f.severity) return 0
   const factor =
-    (DAMAGE_TYPE_WEIGHT[f.damageType] +
+    (weightOf(DAMAGE_TYPE_WEIGHT, f.damageType) +
       weightOf(ELEMENT_WEIGHT, f.element) +
       weightOf(ZONE_WEIGHT, f.zone) +
       weightOf(CAUSE_WEIGHT, f.cause)) /

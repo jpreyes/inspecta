@@ -52,7 +52,9 @@ export function findingToRemote(f: Finding, owner: string): Remote {
   return {
     id: f.id,
     inspection: f.inspectionId,
+    component: f.component ?? '',
     element: f.element,
+    material: f.material ?? '',
     zone: f.zone ?? '',
     element_id: f.elementId ?? '',
     damage_type: f.damageType,
@@ -123,7 +125,9 @@ export function findingFromRemote(r: any): Finding {
   return {
     id: r.id,
     inspectionId: r.inspection,
+    component: r.component || undefined,
     element: r.element || '',
+    material: r.material || undefined,
     zone: r.zone || undefined,
     elementId: r.element_id || undefined,
     damageType: r.damage_type,

@@ -3,14 +3,8 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { Printer, FlaskConical } from 'lucide-vue-next'
 import { useInspectionStore } from '../../stores/inspection'
-import { damageIcon } from '../../ui/icons'
-import {
-  CONDITION,
-  DAMAGE_TYPES,
-  SEVERITY,
-  findingIndex,
-  type Severity,
-} from '../../types/inspection'
+import { iconForDamage } from '../../ui/icons'
+import { CONDITION, SEVERITY, findingIndex, type Severity } from '../../types/inspection'
 
 const store = useInspectionStore()
 const {
@@ -195,13 +189,11 @@ function printReport() {
             class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
             :style="{ background: SEVERITY[f.severity].color + '22', color: SEVERITY[f.severity].color }"
           >
-            <component :is="damageIcon[f.damageType]" :size="18" />
+            <component :is="iconForDamage(f.damageType)" :size="18" />
           </div>
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
-              <span class="text-sm font-medium text-ink-100">
-                {{ DAMAGE_TYPES[f.damageType].label }}
-              </span>
+              <span class="text-sm font-medium text-ink-100">{{ f.damageType }}</span>
               <span class="text-xs text-ink-500">· {{ f.element }}<span v-if="f.zone"> / {{ f.zone }}</span></span>
             </div>
             <p v-if="f.notes" class="truncate text-xs text-ink-400">{{ f.notes }}</p>

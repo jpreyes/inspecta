@@ -3,8 +3,8 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { Plus, Trash2 } from 'lucide-vue-next'
 import { useInspectionStore } from '../../stores/inspection'
-import { damageIcon } from '../../ui/icons'
-import { CONDITION, DAMAGE_TYPES, DAMAGE_CAUSES, SEVERITY, findingIndex } from '../../types/inspection'
+import { iconForDamage } from '../../ui/icons'
+import { CONDITION, SEVERITY, findingIndex } from '../../types/inspection'
 import InspectionSelector from '../inspection/InspectionSelector.vue'
 
 const store = useInspectionStore()
@@ -57,6 +57,7 @@ function fmt(d?: string) {
         <thead class="bg-ink-900 text-left text-[11px] uppercase tracking-wide text-ink-500">
           <tr>
             <th class="px-3 py-2 font-medium">Elemento</th>
+            <th class="px-3 py-2 font-medium">Material</th>
             <th class="px-3 py-2 font-medium">Zona</th>
             <th class="px-3 py-2 font-medium">Daño</th>
             <th class="px-3 py-2 font-medium">Causa</th>
@@ -68,16 +69,20 @@ function fmt(d?: string) {
         </thead>
         <tbody class="divide-y divide-ink-800">
           <tr v-for="f in currentFindings" :key="f.id" class="bg-ink-900/50 hover:bg-ink-850">
-            <td class="px-3 py-2 font-medium text-ink-100">{{ f.element }}</td>
+            <td class="px-3 py-2 font-medium text-ink-100">
+              {{ f.element }}
+              <span v-if="f.component" class="block text-[10px] font-normal text-ink-600">{{ f.component }}</span>
+            </td>
+            <td class="px-3 py-2 text-ink-400">{{ f.material || '—' }}</td>
             <td class="px-3 py-2 text-ink-400">{{ f.zone || '—' }}</td>
             <td class="px-3 py-2">
               <div class="flex items-center gap-1.5 text-ink-200">
-                <component :is="damageIcon[f.damageType]" :size="15" class="text-ink-400" />
-                {{ DAMAGE_TYPES[f.damageType].label }}
+                <component :is="iconForDamage(f.damageType)" :size="15" class="text-ink-400" />
+                {{ f.damageType }}
               </div>
               <p v-if="f.notes" class="mt-0.5 max-w-xs truncate text-[11px] text-ink-500">{{ f.notes }}</p>
             </td>
-            <td class="px-3 py-2 text-ink-400">{{ f.cause ? DAMAGE_CAUSES[f.cause] : '—' }}</td>
+            <td class="px-3 py-2 text-ink-400">{{ f.cause || '—' }}</td>
             <td class="px-3 py-2">
               <span
                 class="rounded px-1.5 py-0.5 text-[11px] font-semibold"

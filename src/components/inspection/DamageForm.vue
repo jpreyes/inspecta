@@ -4,13 +4,11 @@ import { storeToRefs } from 'pinia'
 import { Camera, X } from 'lucide-vue-next'
 import { useInspectionStore } from '../../stores/inspection'
 import {
-  DAMAGE_TYPES,
-  DAMAGE_CAUSES,
+  catalogFor,
+  elementInfo,
+  damagesForMaterial,
+  causesForDamage,
   SEVERITY,
-  ELEMENT_TYPES,
-  zonesFor,
-  type DamageType,
-  type DamageCause,
   type Photo,
   type Severity,
 } from '../../types/inspection'
@@ -18,38 +16,73 @@ import {
 const store = useInspectionStore()
 const { activeStructure, activeInspection } = storeToRefs(store)
 
-const damageKeys = Object.keys(DAMAGE_TYPES) as DamageType[]
-const causeKeys = Object.keys(DAMAGE_CAUSES) as DamageCause[]
+const cat = computed(() => catalogFor(activeStructure.value?.type))
 const severities = [1, 2, 3, 4, 0] as Severity[]
 
 const form = reactive({
-  element: ELEMENT_TYPES[0],
+  component: '',
+  element: '',
   elementOther: '',
+  material: '',
+  materialOther: '',
   zone: '',
   zoneOther: '',
-  damageType: 'fisura' as DamageType,
-  cause: 'estructural' as DamageCause,
+  damageType: '',
+  damageOther: '',
+  cause: '',
+  causeOther: '',
   severity: 2 as Severity,
   extension: 20,
   notes: '',
   photos: [] as Photo[],
 })
 
-const zoneOptions = computed(() => zonesFor(form.element))
-// al cambiar el elemento, reinicia la zona (dependiente del elemento)
-watch(
-  () => form.element,
-  () => {
-    form.zone = ''
-    form.zoneOther = ''
-  },
+const components = computed(() => cat.value.components)
+const elementOptions = computed(() => components.value.find((c) => c.component === form.component)?.elements ?? [])
+const info = computed(() => (form.element && form.element !== 'Otro' ? elementInfo(cat.value, form.element) : undefined))
+const materialOptions = computed(() => info.value?.materials ?? [])
+const zoneOptions = computed(() => info.value?.zones ?? ['Otro'])
+const materialValue = computed(() => (form.material === 'Otro' ? form.materialOther.trim() : form.material))
+const damageOptions = computed(() => damagesForMaterial(cat.value, materialValue.value))
+const causeOptions = computed(() =>
+  form.damageType && form.damageType !== 'Otro' ? causesForDamage(cat.value, form.damageType) : [],
 )
 
 const elementValue = computed(() => (form.element === 'Otro' ? form.elementOther.trim() : form.element))
+const damageValue = computed(() => (form.damageType === 'Otro' ? form.damageOther.trim() : form.damageType))
 const zoneValue = computed(() => (form.zone === 'Otro' ? form.zoneOther.trim() : form.zone))
-const canSave = computed(() => !!elementValue.value && !!activeInspection.value)
-
+const causeValue = computed(() => (form.cause === 'Otro' ? form.causeOther.trim() : form.cause))
+const canSave = computed(() => !!elementValue.value && !!damageValue.value && !!activeInspection.value)
 const saving = ref(false)
+
+// defaults + resets en cascada
+form.component = components.value[0]?.component ?? ''
+form.element = elementOptions.value[0]?.element ?? ''
+watch(
+  () => form.component,
+  () => {
+    form.element = elementOptions.value[0]?.element ?? ''
+    form.elementOther = ''
+  },
+)
+watch(
+  () => form.element,
+  () => {
+    form.material = ''
+    form.materialOther = ''
+    form.zone = ''
+    form.zoneOther = ''
+    form.damageType = ''
+    form.cause = ''
+  },
+)
+watch(
+  () => [form.material, form.damageType],
+  () => {
+    form.cause = ''
+    form.causeOther = ''
+  },
+)
 
 async function onPhoto(ev: Event) {
   const files = (ev.target as HTMLInputElement).files
@@ -69,10 +102,12 @@ async function submit() {
   if (!canSave.value || saving.value) return
   saving.value = true
   const f = await store.addFinding({
+    component: form.component || undefined,
     element: elementValue.value,
+    material: materialValue.value || undefined,
     zone: zoneValue.value || undefined,
-    damageType: form.damageType,
-    cause: form.cause,
+    damageType: damageValue.value,
+    cause: causeValue.value || undefined,
     severity: form.severity,
     extension: form.extension,
     notes: form.notes,
@@ -81,6 +116,9 @@ async function submit() {
   saving.value = false
   store.closeDamageForm()
 }
+
+const selectCls = 'w-full rounded-md border border-ink-700 bg-ink-800 px-2 py-2 text-sm text-ink-100'
+const textCls = 'mt-1.5 w-full rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-sm text-ink-100'
 </script>
 
 <template>
@@ -89,62 +127,74 @@ async function submit() {
       <div class="flex items-center justify-between border-b border-ink-800 px-4 py-3">
         <div>
           <h2 class="text-sm font-semibold text-ink-100">Nuevo daño</h2>
-          <p class="text-[11px] text-ink-500">
-            {{ activeStructure?.name }} · campaña {{ activeInspection?.date }}
-          </p>
+          <p class="text-[11px] text-ink-500">{{ activeStructure?.name }} · campaña {{ activeInspection?.date }}</p>
         </div>
-        <button class="text-ink-500 hover:text-ink-200" @click="store.closeDamageForm()">
-          <X :size="18" />
-        </button>
+        <button class="text-ink-500 hover:text-ink-200" @click="store.closeDamageForm()"><X :size="18" /></button>
       </div>
 
       <form class="space-y-3 p-4" @submit.prevent="submit">
-        <!-- ELEMENTO + ZONA (el "dónde") -->
+        <!-- Componente + Elemento -->
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="mb-1 block text-[11px] font-medium text-ink-300">Elemento</label>
-            <select v-model="form.element" class="w-full rounded-md border border-ink-700 bg-ink-800 px-2 py-2 text-sm text-ink-100">
-              <option v-for="e in ELEMENT_TYPES" :key="e" :value="e">{{ e }}</option>
+            <label class="mb-1 block text-[11px] font-medium text-ink-300">Componente</label>
+            <select v-model="form.component" :class="selectCls">
+              <option v-for="c in components" :key="c.component" :value="c.component">{{ c.component }}</option>
             </select>
-            <input
-              v-if="form.element === 'Otro'"
-              v-model="form.elementOther"
-              type="text"
-              placeholder="Escribe el elemento"
-              class="mt-1.5 w-full rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-sm text-ink-100"
-            />
+          </div>
+          <div>
+            <label class="mb-1 block text-[11px] font-medium text-ink-300">Elemento</label>
+            <select v-model="form.element" :class="selectCls">
+              <option v-for="e in elementOptions" :key="e.element" :value="e.element">{{ e.element }}</option>
+              <option value="Otro">Otro…</option>
+            </select>
+            <input v-if="form.element === 'Otro'" v-model="form.elementOther" type="text" placeholder="Escribe el elemento" :class="textCls" />
+          </div>
+        </div>
+
+        <!-- Material + Zona -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="mb-1 block text-[11px] font-medium text-ink-300">Material</label>
+            <select v-model="form.material" :class="selectCls">
+              <option value="">— sin especificar —</option>
+              <option v-for="m in materialOptions" :key="m" :value="m">{{ m }}</option>
+              <option value="Otro">Otro…</option>
+            </select>
+            <input v-if="form.material === 'Otro'" v-model="form.materialOther" type="text" placeholder="Escribe el material" :class="textCls" />
           </div>
           <div>
             <label class="mb-1 block text-[11px] font-medium text-ink-300">Zona / ubicación</label>
-            <select v-model="form.zone" class="w-full rounded-md border border-ink-700 bg-ink-800 px-2 py-2 text-sm text-ink-100">
+            <select v-model="form.zone" :class="selectCls">
               <option value="">— sin especificar —</option>
               <option v-for="z in zoneOptions" :key="z" :value="z">{{ z }}</option>
             </select>
-            <input
-              v-if="form.zone === 'Otro'"
-              v-model="form.zoneOther"
-              type="text"
-              placeholder="Escribe la zona"
-              class="mt-1.5 w-full rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-sm text-ink-100"
-            />
+            <input v-if="form.zone === 'Otro'" v-model="form.zoneOther" type="text" placeholder="Escribe la zona" :class="textCls" />
           </div>
         </div>
 
+        <!-- Deterioro + Causa -->
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="mb-1 block text-[11px] text-ink-400">Tipo de daño</label>
-            <select v-model="form.damageType" class="w-full rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-sm text-ink-200">
-              <option v-for="k in damageKeys" :key="k" :value="k">{{ DAMAGE_TYPES[k].label }}</option>
+            <label class="mb-1 block text-[11px] font-medium text-ink-300">Tipo de daño</label>
+            <select v-model="form.damageType" :class="selectCls">
+              <option value="">— selecciona —</option>
+              <option v-for="d in damageOptions" :key="d.name" :value="d.name">{{ d.name }}</option>
+              <option value="Otro">Otro…</option>
             </select>
+            <input v-if="form.damageType === 'Otro'" v-model="form.damageOther" type="text" placeholder="Escribe el daño" :class="textCls" />
           </div>
           <div>
-            <label class="mb-1 block text-[11px] text-ink-400">Causa probable</label>
-            <select v-model="form.cause" class="w-full rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-sm text-ink-200">
-              <option v-for="c in causeKeys" :key="c" :value="c">{{ DAMAGE_CAUSES[c] }}</option>
+            <label class="mb-1 block text-[11px] font-medium text-ink-300">Causa probable</label>
+            <select v-model="form.cause" :class="selectCls">
+              <option value="">— sin especificar —</option>
+              <option v-for="c in causeOptions" :key="c" :value="c">{{ c }}</option>
+              <option value="Otro">Otro…</option>
             </select>
+            <input v-if="form.cause === 'Otro'" v-model="form.causeOther" type="text" placeholder="Escribe la causa" :class="textCls" />
           </div>
         </div>
 
+        <!-- Severidad -->
         <div>
           <label class="mb-1 block text-[11px] text-ink-400">Severidad</label>
           <div class="flex gap-1">
@@ -172,12 +222,7 @@ async function submit() {
 
         <div>
           <label class="mb-1 block text-[11px] text-ink-400">Observaciones</label>
-          <textarea
-            v-model="form.notes"
-            rows="2"
-            class="w-full rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-sm text-ink-200"
-            placeholder="Descripción, medidas, recomendaciones…"
-          />
+          <textarea v-model="form.notes" rows="2" class="w-full rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-sm text-ink-200" placeholder="Descripción, medidas, recomendaciones…" />
         </div>
 
         <div>
@@ -191,16 +236,8 @@ async function submit() {
         </div>
 
         <div class="flex gap-2 pt-1">
-          <button type="button" class="flex-1 rounded-md border border-ink-700 py-2 text-sm text-ink-300 hover:bg-ink-800" @click="store.closeDamageForm()">
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            class="flex-1 rounded-md bg-brand-600 py-2 text-sm font-medium text-ink-950 hover:bg-brand-500 disabled:opacity-50"
-            :disabled="!canSave || saving"
-          >
-            Guardar daño
-          </button>
+          <button type="button" class="flex-1 rounded-md border border-ink-700 py-2 text-sm text-ink-300 hover:bg-ink-800" @click="store.closeDamageForm()">Cancelar</button>
+          <button type="submit" class="flex-1 rounded-md bg-brand-600 py-2 text-sm font-medium text-ink-950 hover:bg-brand-500 disabled:opacity-50" :disabled="!canSave || saving">Guardar daño</button>
         </div>
       </form>
     </div>

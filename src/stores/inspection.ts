@@ -270,11 +270,13 @@ export const useInspectionStore = defineStore('inspection', () => {
   }
 
   async function addFinding(payload: {
+    component?: string
     element: string
+    material?: string
     zone?: string
     elementId?: string
-    damageType: Finding['damageType']
-    cause?: Finding['cause']
+    damageType: string
+    cause?: string
     severity: Severity
     extension: number
     pin?: Vec3

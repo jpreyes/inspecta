@@ -29,3 +29,4 @@ pocketbase/pb_data/
 *.njsproj
 *.sln
 *.sw?
+*.xlsx
