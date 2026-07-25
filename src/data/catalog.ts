@@ -615,7 +615,7 @@ export const CATALOG: Record<string, StructureCatalog> = {
           "Albañilería confinada"
         ],
         "severity": [
-          "-",
+          "~1 mm, pasante, sin incidencia estructural aparente",
           "1-2 mm con incidencia estructural",
           "2-5 mm",
           "> 5 mm, evolutiva; compromete estabilidad"
@@ -627,10 +627,10 @@ export const CATALOG: Record<string, StructureCatalog> = {
           "Hormigón armado"
         ],
         "severity": [
-          "",
-          "",
-          "",
-          ""
+          "fisuración superficial fina, sin desprendimientos",
+          "retícula marcada con inicio de disgregación superficial",
+          "fisuración con desprendimiento de árido y avance en profundidad",
+          "generalizada, con pérdida de material y afectación de armadura"
         ]
       },
       {
@@ -639,10 +639,10 @@ export const CATALOG: Record<string, StructureCatalog> = {
           "Hormigón armado"
         ],
         "severity": [
-          "",
-          "",
-          "",
-          ""
+          "desprendimiento puntual del recubrimiento, sin llegar a la armadura",
+          "descascaramiento localizado, recubrimiento reducido",
+          "descascaramiento extenso, armadura a punto de quedar expuesta",
+          "pérdida generalizada del recubrimiento en la zona"
         ]
       },
       {
@@ -663,10 +663,10 @@ export const CATALOG: Record<string, StructureCatalog> = {
           "Hormigón armado"
         ],
         "severity": [
-          "",
-          "",
-          "",
-          ""
+          "armadura expuesta sin corrosión, puntual",
+          "armadura expuesta con oxidación superficial",
+          "expuesta con corrosión y pérdida de sección leve",
+          "expuesta y corroída, con pérdida de sección significativa o barras seccionadas"
         ]
       },
       {
@@ -689,10 +689,10 @@ export const CATALOG: Record<string, StructureCatalog> = {
           "Acero"
         ],
         "severity": [
-          "",
-          "",
-          "",
-          ""
+          "mancha superficial aislada, sin fisura asociada",
+          "manchas recurrentes, posible corrosión incipiente bajo recubrimiento",
+          "manchas con fisura o abombamiento del recubrimiento",
+          "generalizadas, con descascaramiento y armadura corroída"
         ]
       },
       {
@@ -701,10 +701,10 @@ export const CATALOG: Record<string, StructureCatalog> = {
           "Hormigón armado"
         ],
         "severity": [
-          "",
-          "",
-          "",
-          ""
+          "coquera superficial pequeña, sin armadura expuesta",
+          "coquera localizada con recubrimiento reducido",
+          "coquera profunda con armadura expuesta",
+          "nidos extensos que comprometen sección o anclaje de armadura"
         ]
       },
       {
@@ -726,10 +726,10 @@ export const CATALOG: Record<string, StructureCatalog> = {
           "Albañilería confinada"
         ],
         "severity": [
-          "",
-          "",
-          "",
-          ""
+          "depósito salino leve, superficie seca",
+          "eflorescencia con humedad asociada",
+          "persistente, con inicio de disgregación/lixiviación",
+          "lixiviación activa (lavado/estalactitas) con deterioro del material"
         ]
       },
       {
@@ -750,10 +750,10 @@ export const CATALOG: Record<string, StructureCatalog> = {
           "todos"
         ],
         "severity": [
-          "",
-          "",
-          "",
-          ""
+          "desviación perceptible dentro de tolerancias, sin daño asociado",
+          "desplome apreciable, sin fisuración estructural",
+          "desplome con fisuración asociada / fuera de tolerancia",
+          "desplome severo o creciente que compromete la estabilidad"
         ]
       },
       {
@@ -763,10 +763,10 @@ export const CATALOG: Record<string, StructureCatalog> = {
           "Albañilería confinada"
         ],
         "severity": [
-          "",
-          "",
-          "",
-          ""
+          "disgregación superficial leve, material pulverulento puntual",
+          "pérdida de mortero/árido superficial",
+          "disgregación en profundidad con reducción de sección",
+          "pérdida de material generalizada con armadura expuesta o comprometida"
         ]
       },
       {
@@ -776,10 +776,10 @@ export const CATALOG: Record<string, StructureCatalog> = {
           "Hormigón armado"
         ],
         "severity": [
-          "",
-          "",
-          "",
-          ""
+          "fisuras finas por compresión, sin desprendimiento",
+          "fisuración vertical marcada, inicio de desconche de unidades",
+          "aplastamiento local con desprendimiento de piezas",
+          "generalizado, con pérdida de capacidad portante"
         ]
       },
       {
@@ -788,10 +788,10 @@ export const CATALOG: Record<string, StructureCatalog> = {
           "Acero"
         ],
         "severity": [
-          "",
-          "",
-          "",
-          ""
+          "abolladura leve de ala/alma, sin plastificación",
+          "pandeo local apreciable, sin pérdida de capacidad evidente",
+          "pandeo con plastificación local",
+          "pandeo severo con pérdida de capacidad o colapso local inminente"
         ]
       },
       {
@@ -800,10 +800,10 @@ export const CATALOG: Record<string, StructureCatalog> = {
           "Albañilería confinada"
         ],
         "severity": [
-          "",
-          "",
-          "",
-          ""
+          "pérdida superficial de mortero (< 1 cm)",
+          "juntas erosionadas, profundidad moderada",
+          "pérdida en profundidad, holgura entre piezas",
+          "juntas vacías generalizadas, inestabilidad de piezas"
         ]
       },
       {
@@ -813,10 +813,10 @@ export const CATALOG: Record<string, StructureCatalog> = {
           "Madera"
         ],
         "severity": [
-          "",
-          "",
-          "",
-          ""
+          "deterioro puntual de pintura/galvanizado, sin corrosión",
+          "pérdida localizada con oxidación superficial incipiente",
+          "pérdida extensa con corrosión activa",
+          "ausencia total de protección con corrosión avanzada"
         ]
       },
       {
@@ -825,10 +825,10 @@ export const CATALOG: Record<string, StructureCatalog> = {
           "Madera"
         ],
         "severity": [
-          "",
-          "",
-          "",
-          ""
+          "ataque superficial o indicios (galerías), sin pérdida de sección",
+          "pudrición o ataque localizado con pérdida de sección leve",
+          "pudrición en profundidad con pérdida de sección apreciable",
+          "pérdida de sección severa; sin capacidad resistente fiable"
         ]
       },
       {
@@ -837,10 +837,10 @@ export const CATALOG: Record<string, StructureCatalog> = {
           "Acero"
         ],
         "severity": [
-          "",
-          "",
-          "",
-          ""
+          "defecto superficial (salpicadura, mordedura leve), sin fisura",
+          "corrosión o fisura fina en el cordón, sin pérdida de capacidad",
+          "fisura en soldadura o pérdida de garganta apreciable",
+          "fisura pasante o rotura de la conexión"
         ]
       },
       {
@@ -850,10 +850,10 @@ export const CATALOG: Record<string, StructureCatalog> = {
           "Hormigón armado"
         ],
         "severity": [
-          "",
-          "",
-          "",
-          ""
+          "pernos con oxidación superficial, apriete correcto",
+          "aflojamiento leve o falta puntual de pernos no críticos",
+          "varios pernos flojos/faltantes o corrosión con pérdida de sección",
+          "pérdida generalizada o anclaje sin capacidad; conexión comprometida"
         ]
       },
       {
@@ -862,10 +862,10 @@ export const CATALOG: Record<string, StructureCatalog> = {
           "todos"
         ],
         "severity": [
-          "",
-          "",
-          "",
-          ""
+          "suciedad, pátina o decoloración, sin daño del material",
+          "erosión/abrasión superficial leve",
+          "alteración con pérdida de material superficial",
+          "alteración profunda que reduce sección o recubrimiento"
         ]
       },
       {
@@ -874,10 +874,10 @@ export const CATALOG: Record<string, StructureCatalog> = {
           "todos"
         ],
         "severity": [
-          "",
-          "",
-          "",
-          ""
+          "presencia de musgo/líquenes, sin daño",
+          "vegetación menor con retención de humedad",
+          "raíces o vegetación con fisuración/disgregación asociada",
+          "vegetación arraigada que abre juntas o desplaza elementos"
         ]
       }
     ],
