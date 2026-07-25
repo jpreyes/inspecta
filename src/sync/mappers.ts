@@ -23,7 +23,15 @@ export function projectToRemote(p: Project, owner: string): Remote {
 }
 
 export function structureToRemote(s: Structure, owner: string): Remote {
-  return { id: s.id, project: s.projectId, name: s.name, stype: s.type, grid: s.grid, owner }
+  return {
+    id: s.id,
+    project: s.projectId,
+    name: s.name,
+    stype: s.type,
+    grid: s.grid ?? null,
+    elements: s.elements, // persistimos la lista (necesario para estructuras sin modelo 3D)
+    owner,
+  }
 }
 
 export function inspectionToRemote(i: Inspection, owner: string, conditionScore?: number): Remote {
@@ -83,14 +91,16 @@ export function projectFromRemote(r: any): Project {
 }
 
 export function structureFromRemote(r: any): Structure {
-  const grid = r.grid as Structure['grid']
+  const grid = (r.grid || undefined) as Structure['grid']
+  const stored = Array.isArray(r.elements) ? (r.elements as Structure['elements']) : []
   return {
     id: r.id,
     projectId: r.project,
     name: r.name,
     type: r.stype,
     grid,
-    elements: generateFrame(grid), // regenerados desde la grilla
+    // usa la lista guardada; si no hay y sí hay grilla, la regenera
+    elements: stored.length ? stored : grid ? generateFrame(grid) : [],
   }
 }
 

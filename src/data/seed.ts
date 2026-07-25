@@ -1,4 +1,4 @@
-import type { Finding, Inspection, Project, Structure, Test } from '../types/inspection'
+import type { Element, Finding, Inspection, Project, Structure, Test } from '../types/inspection'
 import { generateFrame } from './generate'
 
 // IDs de 15 caracteres [a-z0-9] → compatibles con los record ids de PocketBase,
@@ -7,6 +7,9 @@ const PRJ = 'prjdemoaulario1'
 const STR = 'strdemobloquea1'
 const INSP1 = 'inspdemomarzo01'
 const INSP2 = 'inspdemojunio02'
+// Estructura SIN modelo 3D (puente) — solo lista/jerarquía de elementos.
+const STR2 = 'strdemopuente01'
+const INSP3 = 'inspdemopuen001'
 
 // Proyecto demo — edificio de HA de 3 pisos en Valdivia
 export const seedProjects: Project[] = [
@@ -21,6 +24,16 @@ export const seedProjects: Project[] = [
 
 const grid = { baysX: 3, baysZ: 2, stories: 3, bayX: 6, bayZ: 5, storyH: 3.2 }
 
+// Elementos de un puente definidos a mano (sin geometría 3D).
+const bridgeElements: Element[] = [
+  { id: 'P1', tag: 'Pila P1', type: 'fundacion', story: 1 },
+  { id: 'P2', tag: 'Pila P2', type: 'fundacion', story: 1 },
+  { id: 'E1', tag: 'Estribo E1', type: 'fundacion', story: 1 },
+  { id: 'E2', tag: 'Estribo E2', type: 'fundacion', story: 1 },
+  { id: 'V1', tag: 'Tablero · Vano 1', type: 'losa', story: 2 },
+  { id: 'V2', tag: 'Tablero · Vano 2', type: 'losa', story: 2 },
+]
+
 export const seedStructures: Structure[] = [
   {
     id: STR,
@@ -29,6 +42,14 @@ export const seedStructures: Structure[] = [
     type: 'edificio',
     grid,
     elements: generateFrame(grid),
+  },
+  {
+    // Sin `grid` → sin modelo 3D. Se inspecciona por lista/jerarquía.
+    id: STR2,
+    projectId: PRJ,
+    name: 'Puente Río Cruces (sin modelo 3D)',
+    type: 'puente',
+    elements: bridgeElements,
   },
 ]
 
@@ -49,6 +70,14 @@ export const seedInspections: Inspection[] = [
     inspector: 'J. Reyes',
     weather: 'Lluvia leve',
     summary: 'Seguimiento a 3 meses. Progresión de fisuras en nivel 1.',
+  },
+  {
+    id: INSP3,
+    structureId: STR2,
+    date: '2025-05-05',
+    inspector: 'J. Reyes',
+    weather: 'Despejado',
+    summary: 'Inspección de puente sin modelo 3D — registro por lista de elementos.',
   },
 ]
 
@@ -143,5 +172,28 @@ export const seedFindings: Finding[] = [
     notes: 'Deflexión estable respecto a campaña anterior.',
     photos: [],
     createdAt: now,
+  },
+  // Puente (sin 3D): hallazgos sin pin, registrados por lista
+  {
+    id: 'fnddemopila0001',
+    inspectionId: INSP3,
+    elementId: 'P1',
+    damageType: 'grieta',
+    severity: 3,
+    extension: 30,
+    notes: 'Grieta vertical en fuste de pila, ~2 mm, con eflorescencia.',
+    photos: [],
+    createdAt: '2025-05-05T10:00:00Z',
+  },
+  {
+    id: 'fnddemoestrib02',
+    inspectionId: INSP3,
+    elementId: 'E1',
+    damageType: 'humedad',
+    severity: 2,
+    extension: 50,
+    notes: 'Filtración y humedad en estribo, arrastre de finos.',
+    photos: [],
+    createdAt: '2025-05-05T10:20:00Z',
   },
 ]

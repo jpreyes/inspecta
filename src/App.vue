@@ -8,6 +8,7 @@ import TwinCanvas from './components/twin/TwinCanvas.vue'
 import InspectionSelector from './components/inspection/InspectionSelector.vue'
 import InspectionPanel from './components/inspection/InspectionPanel.vue'
 import ResultsView from './components/results/ResultsView.vue'
+import DamageListView from './components/list/DamageListView.vue'
 
 const store = useInspectionStore()
 const { ready, activeView } = storeToRefs(store)
@@ -22,8 +23,19 @@ onMounted(() => store.init())
     <div v-if="ready" class="flex min-h-0 flex-1">
       <Sidebar class="w-72 shrink-0 border-r border-ink-800 bg-ink-900" />
 
+      <!-- Vista LISTA (por defecto) -->
+      <template v-if="activeView === 'list'">
+        <main class="relative min-w-0 flex-1 overflow-y-auto bg-ink-950">
+          <DamageListView />
+          <div class="pointer-events-none sticky inset-x-0 bottom-0 p-4">
+            <InspectionSelector class="pointer-events-auto" />
+          </div>
+        </main>
+        <InspectionPanel class="w-96 shrink-0 border-l border-ink-800 bg-ink-900" />
+      </template>
+
       <!-- Vista GEMELO 3D -->
-      <template v-if="activeView === 'twin'">
+      <template v-else-if="activeView === 'twin'">
         <main class="relative min-w-0 flex-1 bg-ink-950">
           <TwinCanvas />
           <div class="pointer-events-none absolute inset-x-0 bottom-0 p-4">

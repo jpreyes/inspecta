@@ -52,6 +52,7 @@ migrate(
         { name: 'name', type: 'text', required: true },
         { name: 'stype', type: 'text' },
         { name: 'grid', type: 'json' },
+        { name: 'elements', type: 'json' },
         owner(),
         ...stamps(),
       ],

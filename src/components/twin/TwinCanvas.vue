@@ -28,19 +28,23 @@ const LIGHT_A: Tuple3 = [12, 20, 8]
 const LIGHT_B: Tuple3 = [-10, 8, -12]
 
 const meshes = computed(() =>
-  (activeStructure.value?.elements ?? []).map((el) => ({
-    el,
-    position: [el.position.x, el.position.y, el.position.z] as Tuple3,
-    size: [el.size.x, el.size.y, el.size.z] as Tuple3,
-  })),
+  (activeStructure.value?.elements ?? [])
+    .filter((el) => el.position && el.size)
+    .map((el) => ({
+      el,
+      position: [el.position!.x, el.position!.y, el.position!.z] as Tuple3,
+      size: [el.size!.x, el.size!.y, el.size!.z] as Tuple3,
+    })),
 )
 
 const pins = computed(() =>
-  findingsAsOf.value.map((f) => ({
-    id: f.id,
-    color: SEVERITY[f.severity].color,
-    position: [f.pin.x, f.pin.y, f.pin.z] as Tuple3,
-  })),
+  findingsAsOf.value
+    .filter((f) => f.pin)
+    .map((f) => ({
+      id: f.id,
+      color: SEVERITY[f.severity].color,
+      position: [f.pin!.x, f.pin!.y, f.pin!.z] as Tuple3,
+    })),
 )
 
 /** Color del elemento según su severidad vigente en la fecha del timeline. */

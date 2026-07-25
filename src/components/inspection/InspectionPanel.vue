@@ -14,7 +14,7 @@ import {
 } from '../../types/inspection'
 
 const store = useInspectionStore()
-const { selectedElement, selectedElementFindings, currentFindings, activeInspection, pendingPin } =
+const { selectedElement, selectedElementFindings, currentFindings, activeInspection, pendingPin, activeHasModel } =
   storeToRefs(store)
 
 const damageKeys = Object.keys(DAMAGE_TYPES) as DamageType[]
@@ -40,7 +40,7 @@ function resetForm() {
 function openForm() {
   showForm.value = true
   resetForm()
-  store.startPinPlacement()
+  if (activeHasModel.value) store.startPinPlacement()
 }
 function closeForm() {
   showForm.value = false
@@ -74,12 +74,12 @@ async function onPhoto(ev: Event) {
 async function submit() {
   const el = selectedElement.value
   if (!el) return
-  // pin clavado por raycast; fallback al centro del elemento con offset frontal
-  const pin = pendingPin.value ?? {
-    x: el.position.x,
-    y: el.position.y,
-    z: el.position.z + el.size.z / 2 + 0.15,
-  }
+  // pin clavado por raycast; fallback al centro del elemento (solo si hay geometría)
+  const pin =
+    pendingPin.value ??
+    (el.position && el.size
+      ? { x: el.position.x, y: el.position.y, z: el.position.z + el.size.z / 2 + 0.15 }
+      : undefined)
   const f = await store.addFinding({
     elementId: el.id,
     damageType: form.damageType,
@@ -186,19 +186,20 @@ const list = computed(() =>
       </button>
 
       <form v-else class="space-y-3" @submit.prevent="submit">
-        <!-- estado del pin por raycast -->
+        <!-- estado del pin por raycast (solo si la estructura tiene modelo 3D) -->
         <div
+          v-if="activeHasModel"
           class="flex items-center gap-2 rounded-md border px-2 py-1.5 text-[11px]"
           :class="
             pendingPin
               ? 'border-brand-600/50 bg-brand-600/10 text-brand-500'
-              : 'border-amber-600/40 bg-amber-500/10 text-amber-400'
+              : 'border-ink-700 bg-ink-800/60 text-ink-400'
           "
         >
           <MapPin v-if="pendingPin" :size="14" class="shrink-0" />
           <Crosshair v-else :size="14" class="shrink-0" />
           <span v-if="pendingPin">Pin clavado en el modelo · click de nuevo para reubicar</span>
-          <span v-else>Haz click sobre el daño en el modelo 3D para clavar el pin</span>
+          <span v-else>Ubicación 3D <b>opcional</b>: click sobre el daño en el modelo, o guarda sin pin</span>
         </div>
 
         <div>

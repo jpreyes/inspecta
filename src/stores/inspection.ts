@@ -9,7 +9,7 @@ import type {
   Test,
   Vec3,
 } from '../types/inspection'
-import { conditionFromScore, worstSeverity } from '../types/inspection'
+import { conditionFromScore, hasModel, worstSeverity } from '../types/inspection'
 import { db, seedIfEmpty } from '../db'
 import { backend, type RemoteUser } from '../sync/backend'
 import { syncNow as runSync } from '../sync/engine'
@@ -42,8 +42,8 @@ export const useInspectionStore = defineStore('inspection', () => {
   const tests = ref<Test[]>([])
   const ready = ref(false)
 
-  /** Vista central: gemelo 3D o panel de resultados. */
-  const activeView = ref<'twin' | 'results'>('twin')
+  /** Vista central: lista de daños (por defecto), gemelo 3D o resultados. */
+  const activeView = ref<'list' | 'twin' | 'results'>('list')
 
   const selectedStructureId = ref<string | null>(null)
   const selectedElementId = ref<string | null>(null)
@@ -85,6 +85,9 @@ export const useInspectionStore = defineStore('inspection', () => {
   const activeStructure = computed<Structure | null>(
     () => structures.value.find((s) => s.id === selectedStructureId.value) ?? null,
   )
+
+  /** ¿La estructura activa tiene modelo 3D? Si no, el gemelo no aplica. */
+  const activeHasModel = computed(() => hasModel(activeStructure.value))
 
   /** Inspecciones de la estructura activa, ordenadas en el tiempo. */
   const structureInspections = computed<Inspection[]>(() =>
@@ -197,13 +200,15 @@ export const useInspectionStore = defineStore('inspection', () => {
     selectedStructureId.value = id
     selectedElementId.value = null
     inspectionIndex.value = Math.max(0, structureInspections.value.length - 1)
+    // si la estructura no tiene modelo 3D, no dejar la vista en el gemelo
+    if (activeView.value === 'twin' && !activeHasModel.value) activeView.value = 'list'
   }
 
   function selectElement(id: string | null) {
     selectedElementId.value = id
   }
 
-  function setView(v: 'twin' | 'results') {
+  function setView(v: 'list' | 'twin' | 'results') {
     activeView.value = v
   }
 
@@ -262,7 +267,7 @@ export const useInspectionStore = defineStore('inspection', () => {
     damageType: Finding['damageType']
     severity: Severity
     extension: number
-    pin: Vec3
+    pin?: Vec3
     notes?: string
   }) {
     if (!activeInspection.value) return
@@ -323,6 +328,7 @@ export const useInspectionStore = defineStore('inspection', () => {
     syncMessage,
     // getters
     activeStructure,
+    activeHasModel,
     structureInspections,
     activeInspection,
     asOfDate,

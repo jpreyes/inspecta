@@ -3,11 +3,12 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useInspectionStore } from '../../stores/inspection'
 
-import { Box, ChartColumn } from 'lucide-vue-next'
+import { Box, ChartColumn, List } from 'lucide-vue-next'
 import SyncControl from '../sync/SyncControl.vue'
 
 const store = useInspectionStore()
-const { activeStructure, structureCondition, asOfDate, activeView } = storeToRefs(store)
+const { activeStructure, structureCondition, asOfDate, activeView, activeHasModel } =
+  storeToRefs(store)
 
 const conditionColor = computed(() => {
   const c = structureCondition.value
@@ -37,6 +38,14 @@ const conditionColor = computed(() => {
     <!-- toggle de vista central -->
     <div class="flex rounded-lg border border-ink-800 bg-ink-950 p-0.5 text-xs">
       <button
+        class="flex items-center gap-1.5 rounded-md px-3 py-1 font-medium transition-colors"
+        :class="activeView === 'list' ? 'bg-ink-800 text-ink-100' : 'text-ink-400 hover:text-ink-200'"
+        @click="store.setView('list')"
+      >
+        <List :size="14" /> Lista
+      </button>
+      <button
+        v-if="activeHasModel"
         class="flex items-center gap-1.5 rounded-md px-3 py-1 font-medium transition-colors"
         :class="activeView === 'twin' ? 'bg-ink-800 text-ink-100' : 'text-ink-400 hover:text-ink-200'"
         @click="store.setView('twin')"

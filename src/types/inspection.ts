@@ -59,15 +59,17 @@ export interface Vec3 {
   z: number
 }
 
-/** Un elemento estructural discreto dentro de una estructura. */
+/** Un elemento estructural discreto dentro de una estructura.
+ *  `position`/`size` solo existen si la estructura tiene modelo 3D; sin modelo,
+ *  el elemento vive igual en la jerarquía (tag + tipo + nivel). */
 export interface Element {
   id: string
   tag: string // ej. "C-A1-N2" (columna, eje A1, nivel 2)
   type: ElementType
-  /** centro del elemento en coordenadas locales de la estructura (m) */
-  position: Vec3
-  /** dimensiones de la caja que lo representa en el gemelo 3D (m) */
-  size: Vec3
+  /** centro del elemento en coordenadas locales (m) — solo con modelo 3D */
+  position?: Vec3
+  /** dimensiones de la caja en el gemelo 3D (m) — solo con modelo 3D */
+  size?: Vec3
   story?: number
 }
 
@@ -76,8 +78,9 @@ export interface Structure {
   projectId: string
   name: string
   type: StructureType
-  /** parámetros del generador paramétrico del gemelo 3D */
-  grid: {
+  /** parámetros del generador paramétrico del gemelo 3D. Opcional: si no hay,
+   *  la estructura no tiene modelo 3D y se trabaja solo por lista/jerarquía. */
+  grid?: {
     baysX: number
     baysZ: number
     stories: number
@@ -86,6 +89,11 @@ export interface Structure {
     storyH: number // altura de piso (m)
   }
   elements: Element[]
+}
+
+/** ¿La estructura tiene modelo 3D (geometría) para el gemelo digital? */
+export function hasModel(s: Structure | null | undefined): boolean {
+  return !!s?.grid && s.elements.some((e) => e.position && e.size)
 }
 
 export interface Project {
@@ -116,8 +124,8 @@ export interface Finding {
   severity: Severity
   /** extensión afectada del elemento, 0–100 % */
   extension: number
-  /** posición del pin sobre la superficie del elemento (coords mundo) */
-  pin: Vec3
+  /** posición del pin sobre la superficie del elemento (coords mundo) — solo con 3D */
+  pin?: Vec3
   notes?: string
   photos: Photo[]
   createdAt: string
