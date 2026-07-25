@@ -61,7 +61,7 @@ const conditionColor = computed(() => {
       </button>
     </div>
 
-    <div class="flex items-center gap-6">
+    <div class="flex items-center gap-4">
       <div v-if="activeStructure" class="text-right">
         <div class="text-xs text-ink-400">{{ activeStructure.name }}</div>
         <div class="text-[11px] text-ink-500">Estado al {{ asOfDate || '—' }}</div>

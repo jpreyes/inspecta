@@ -20,30 +20,21 @@ const {
   structureConditionKey,
   conditionByCampaign,
   severityCounts,
-  findingsAsOf,
+  currentFindings,
   currentTests,
 } = storeToRefs(store)
 
 const condition = computed(() => CONDITION[structureConditionKey.value])
 
-// mapa elementId → tag para mostrar el elemento del hallazgo
-const tagOf = computed(() => {
-  const m: Record<string, string> = {}
-  for (const el of activeStructure.value?.elements ?? []) m[el.id] = el.tag
-  return m
-})
+// hallazgos de la campaña ordenados por severidad (peor primero)
+const prioritized = computed(() => currentFindings.value)
 
-// hallazgos vigentes ordenados por severidad (peor primero)
-const prioritized = computed(() =>
-  [...findingsAsOf.value].sort((a, b) => b.severity - a.severity),
-)
-
-const totalFindings = computed(() => findingsAsOf.value.length)
+const totalFindings = computed(() => currentFindings.value.length)
 const affectedEls = computed(() =>
   Object.values(severityCounts.value).slice(1).reduce((a, b) => a + b, 0),
 )
 const totalPhotos = computed(() =>
-  findingsAsOf.value.reduce((n, f) => n + f.photos.length, 0),
+  currentFindings.value.reduce((n, f) => n + f.photos.length, 0),
 )
 
 // distribución de severidad (solo 1–4, el 0 es "sin daño")
@@ -63,7 +54,8 @@ function fmt(d?: string) {
   return d ? new Date(d + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 }
 
-function viewIn3D(elementId: string) {
+function viewIn3D(elementId?: string) {
+  if (!elementId) return
   store.selectElement(elementId)
   store.setView('twin')
 }
@@ -210,7 +202,7 @@ function printReport() {
               <span class="text-sm font-medium text-ink-100">
                 {{ DAMAGE_TYPES[f.damageType].label }}
               </span>
-              <span class="text-xs text-ink-500">· {{ tagOf[f.elementId] ?? f.elementId }}</span>
+              <span class="text-xs text-ink-500">· {{ f.element }}<span v-if="f.zone"> / {{ f.zone }}</span></span>
             </div>
             <p v-if="f.notes" class="truncate text-xs text-ink-400">{{ f.notes }}</p>
           </div>
@@ -234,6 +226,7 @@ function printReport() {
               {{ SEVERITY[f.severity].label }}
             </span>
             <button
+              v-if="f.elementId"
               class="rounded-md border border-ink-700 px-2 py-1 text-ink-300 hover:bg-ink-800"
               @click="viewIn3D(f.elementId)"
             >
@@ -264,7 +257,7 @@ function printReport() {
             <span v-if="t.method">Método: {{ t.method }}</span>
             <span v-if="t.standard">Norma: {{ t.standard }}</span>
             <span v-if="t.laboratory">Lab: {{ t.laboratory }}</span>
-            <span v-if="t.sampleLocation">Muestra: {{ tagOf[t.sampleLocation] ?? t.sampleLocation }}</span>
+            <span v-if="t.sampleLocation">Muestra: {{ t.sampleLocation }}</span>
           </div>
           <p class="mt-1 text-sm text-ink-200">{{ t.resultSummary }}</p>
         </div>

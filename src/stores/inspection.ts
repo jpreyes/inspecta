@@ -9,7 +9,7 @@ import type {
   Test,
   Vec3,
 } from '../types/inspection'
-import { conditionFromScore, hasModel, worstSeverity } from '../types/inspection'
+import { conditionFromScore, hasModel, inspectionScore } from '../types/inspection'
 import { db, seedIfEmpty } from '../db'
 import { backend, type RemoteUser } from '../sync/backend'
 import { syncNow as runSync } from '../sync/engine'
@@ -54,6 +54,11 @@ export const useInspectionStore = defineStore('inspection', () => {
   // el pin sobre la superficie 3D del elemento.
   const placingPin = ref(false)
   const pendingPin = ref<Vec3 | null>(null)
+
+  // Formulario "daño primero": se abre desde cualquier lado, el elemento es un
+  // campo del formulario (no hay que preseleccionarlo navegando el árbol).
+  const damageFormOpen = ref(false)
+  const damageFormElementId = ref<string | null>(null)
 
   // ── Sync / autenticación (PocketBase) ──────────────────
   const authUser = ref<RemoteUser | null>(backend.user)
@@ -108,25 +113,27 @@ export const useInspectionStore = defineStore('inspection', () => {
    * elemento, el hallazgo más reciente registrado en o antes de esa inspección.
    * Permite ver la estructura tal como estaba en cada visita periódica.
    */
-  /** Peor hallazgo por elemento acumulado hasta `cutoff` (reutilizable). */
+  /** Peor hallazgo por elemento 3D (con elementId) acumulado hasta `cutoff`.
+   *  Solo para colorear el gemelo; los hallazgos sin elementId no aplican. */
   function worstPerElementUpTo(cutoff: string): Finding[] {
     if (!cutoff) return []
     const inspById = new Map(inspections.value.map((i) => [i.id, i]))
     const visible = findings.value.filter((f) => {
       const insp = inspById.get(f.inspectionId)
-      return insp && insp.structureId === selectedStructureId.value && insp.date <= cutoff
+      return f.elementId && insp && insp.structureId === selectedStructureId.value && insp.date <= cutoff
     })
     const latest = new Map<string, Finding>()
     for (const f of visible) {
-      const prev = latest.get(f.elementId)
+      const key = f.elementId as string
+      const prev = latest.get(key)
       if (!prev) {
-        latest.set(f.elementId, f)
+        latest.set(key, f)
         continue
       }
       const fDate = inspById.get(f.inspectionId)!.date
       const pDate = inspById.get(prev.inspectionId)!.date
       if (fDate > pDate || (fDate === pDate && f.createdAt > prev.createdAt)) {
-        latest.set(f.elementId, f)
+        latest.set(key, f)
       }
     }
     return [...latest.values()]
@@ -134,24 +141,17 @@ export const useInspectionStore = defineStore('inspection', () => {
 
   const findingsAsOf = computed<Finding[]>(() => worstPerElementUpTo(asOfDate.value))
 
-  /** Índice de condición 0–100 a partir de un set de hallazgos y total de elementos. */
-  function scoreFrom(fs: Finding[], nEls: number): number {
-    if (!nEls) return 0
-    const worst = worstSeverity(fs)
-    const affected = fs.length / nEls
-    return Math.round(((worst / 4) * 0.75 + affected * 0.25) * 100)
-  }
-
   /** Mapa elementId → severidad vigente a la fecha de corte (para colorear el 3D). */
   const severityByElement = computed<Record<string, Severity>>(() => {
     const map: Record<string, Severity> = {}
     for (const f of findingsAsOf.value) {
-      map[f.elementId] = f.severity > (map[f.elementId] ?? 0) ? f.severity : map[f.elementId] ?? f.severity
+      const k = f.elementId as string
+      map[k] = f.severity > (map[k] ?? 0) ? f.severity : map[k] ?? f.severity
     }
     return map
   })
 
-  /** Todos los hallazgos de la campaña seleccionada (para el listado del panel). */
+  /** Todos los hallazgos de la campaña seleccionada. */
   const currentFindings = computed<Finding[]>(() =>
     findings.value
       .filter((f) => f.inspectionId === activeInspection.value?.id)
@@ -166,27 +166,25 @@ export const useInspectionStore = defineStore('inspection', () => {
     findingsAsOf.value.filter((f) => f.elementId === selectedElementId.value),
   )
 
-  /** Índice de condición global de la estructura (0 sano → 100 crítico). */
-  const structureCondition = computed(() =>
-    scoreFrom(findingsAsOf.value, activeStructure.value?.elements.length ?? 0),
-  )
+  /** Calificación global (0 sano → 100 crítico) de la campaña activa. */
+  const structureCondition = computed(() => inspectionScore(currentFindings.value))
 
   /** Condición semáforo (operativa/observación/crítica) derivada del índice. */
   const structureConditionKey = computed(() => conditionFromScore(structureCondition.value))
 
   /** Condición por campaña de inspección — comparación entre visitas periódicas. */
-  const conditionByCampaign = computed(() => {
-    const nEls = activeStructure.value?.elements.length ?? 0
-    return structureInspections.value.map((insp) => {
-      const score = scoreFrom(worstPerElementUpTo(insp.date), nEls)
+  const conditionByCampaign = computed(() =>
+    structureInspections.value.map((insp) => {
+      const fs = findings.value.filter((f) => f.inspectionId === insp.id)
+      const score = inspectionScore(fs)
       return { id: insp.id, date: insp.date, score, key: conditionFromScore(score) }
-    })
-  })
+    }),
+  )
 
-  /** Conteo de elementos afectados por severidad (1–4), a la fecha del timeline. */
+  /** Conteo de hallazgos por severidad en la campaña activa. */
   const severityCounts = computed<Record<Severity, number>>(() => {
     const c: Record<Severity, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 }
-    for (const [, sev] of Object.entries(severityByElement.value)) c[sev as Severity]++
+    for (const f of currentFindings.value) c[f.severity]++
     return c
   })
 
@@ -210,6 +208,15 @@ export const useInspectionStore = defineStore('inspection', () => {
 
   function setView(v: 'list' | 'twin' | 'results') {
     activeView.value = v
+  }
+
+  function openDamageForm(elementId?: string) {
+    damageFormElementId.value = elementId ?? null
+    damageFormOpen.value = true
+  }
+  function closeDamageForm() {
+    damageFormOpen.value = false
+    damageFormElementId.value = null
   }
 
   // ── Auth + sync ────────────────────────────────────────
@@ -263,8 +270,11 @@ export const useInspectionStore = defineStore('inspection', () => {
   }
 
   async function addFinding(payload: {
-    elementId: string
+    element: string
+    zone?: string
+    elementId?: string
     damageType: Finding['damageType']
+    cause?: Finding['cause']
     severity: Severity
     extension: number
     pin?: Vec3
@@ -322,6 +332,8 @@ export const useInspectionStore = defineStore('inspection', () => {
     inspectionIndex,
     placingPin,
     pendingPin,
+    damageFormOpen,
+    damageFormElementId,
     authUser,
     syncing,
     lastSyncAt,
@@ -348,6 +360,8 @@ export const useInspectionStore = defineStore('inspection', () => {
     selectStructure,
     selectElement,
     setView,
+    openDamageForm,
+    closeDamageForm,
     login,
     logout,
     syncNow,

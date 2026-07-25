@@ -10,7 +10,7 @@ const axisLabel = (i: number) => String.fromCharCode(65 + i) // 0->A, 1->B ...
  * Genera columnas y vigas de un pórtico de momento a partir de la grilla.
  * Convención Three.js: Y es vertical, X y Z horizontales, origen centrado.
  */
-export function generateFrame(grid: Structure['grid']): Element[] {
+export function generateFrame(grid: NonNullable<Structure['grid']>): Element[] {
   const { baysX, baysZ, stories, bayX, bayZ, storyH } = grid
   const nx = baysX + 1
   const nz = baysZ + 1

@@ -82,7 +82,10 @@ migrate(
       ...rules,
       fields: [
         { name: 'inspection', type: 'relation', required: true, maxSelect: 1, cascadeDelete: true, collectionId: inspections.id },
-        { name: 'element_id', type: 'text', required: true },
+        { name: 'element', type: 'text', required: true },
+        { name: 'zone', type: 'text' },
+        { name: 'element_id', type: 'text' },
+        { name: 'cause', type: 'text' },
         { name: 'damage_type', type: 'text', required: true },
         { name: 'severity', type: 'number', required: true },
         { name: 'extension', type: 'number' },

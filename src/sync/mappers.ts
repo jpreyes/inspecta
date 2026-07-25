@@ -52,11 +52,14 @@ export function findingToRemote(f: Finding, owner: string): Remote {
   return {
     id: f.id,
     inspection: f.inspectionId,
-    element_id: f.elementId,
+    element: f.element,
+    zone: f.zone ?? '',
+    element_id: f.elementId ?? '',
     damage_type: f.damageType,
+    cause: f.cause ?? '',
     severity: f.severity,
     extension: f.extension,
-    pin: f.pin,
+    pin: f.pin ?? null,
     notes: f.notes ?? '',
     owner,
   }
@@ -120,11 +123,14 @@ export function findingFromRemote(r: any): Finding {
   return {
     id: r.id,
     inspectionId: r.inspection,
-    elementId: r.element_id,
+    element: r.element || '',
+    zone: r.zone || undefined,
+    elementId: r.element_id || undefined,
     damageType: r.damage_type,
+    cause: r.cause || undefined,
     severity: r.severity,
     extension: r.extension,
-    pin: r.pin as Vec3,
+    pin: (r.pin as Vec3) || undefined,
     notes: r.notes || undefined,
     photos: filenames.map((fn) => ({
       id: fn,
