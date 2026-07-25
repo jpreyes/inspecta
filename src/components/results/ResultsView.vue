@@ -1,0 +1,274 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+import { storeToRefs } from 'pinia'
+import { Printer, FlaskConical } from 'lucide-vue-next'
+import { useInspectionStore } from '../../stores/inspection'
+import { damageIcon } from '../../ui/icons'
+import {
+  CONDITION,
+  DAMAGE_TYPES,
+  SEVERITY,
+  findingIndex,
+  type Severity,
+} from '../../types/inspection'
+
+const store = useInspectionStore()
+const {
+  activeStructure,
+  activeInspection,
+  structureCondition,
+  structureConditionKey,
+  conditionByCampaign,
+  severityCounts,
+  findingsAsOf,
+  currentTests,
+} = storeToRefs(store)
+
+const condition = computed(() => CONDITION[structureConditionKey.value])
+
+// mapa elementId → tag para mostrar el elemento del hallazgo
+const tagOf = computed(() => {
+  const m: Record<string, string> = {}
+  for (const el of activeStructure.value?.elements ?? []) m[el.id] = el.tag
+  return m
+})
+
+// hallazgos vigentes ordenados por severidad (peor primero)
+const prioritized = computed(() =>
+  [...findingsAsOf.value].sort((a, b) => b.severity - a.severity),
+)
+
+const totalFindings = computed(() => findingsAsOf.value.length)
+const affectedEls = computed(() =>
+  Object.values(severityCounts.value).slice(1).reduce((a, b) => a + b, 0),
+)
+const totalPhotos = computed(() =>
+  findingsAsOf.value.reduce((n, f) => n + f.photos.length, 0),
+)
+
+// distribución de severidad (solo 1–4, el 0 es "sin daño")
+const sevLevels: Severity[] = [4, 3, 2, 1]
+const sevTotal = computed(() =>
+  sevLevels.reduce<number>((n, s) => n + severityCounts.value[s], 0),
+)
+function sevPct(s: Severity) {
+  return sevTotal.value ? (severityCounts.value[s] / sevTotal.value) * 100 : 0
+}
+
+const maxCampaignScore = computed(() =>
+  Math.max(10, ...conditionByCampaign.value.map((c) => c.score)),
+)
+
+function fmt(d?: string) {
+  return d ? new Date(d + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+}
+
+function viewIn3D(elementId: string) {
+  store.selectElement(elementId)
+  store.setView('twin')
+}
+function printReport() {
+  window.print()
+}
+</script>
+
+<template>
+  <section class="mx-auto max-w-5xl space-y-5 p-6">
+    <!-- Cabecera -->
+    <header class="flex items-start justify-between">
+      <div>
+        <h1 class="text-xl font-semibold text-ink-100">{{ activeStructure?.name }}</h1>
+        <p class="mt-0.5 text-sm text-ink-400">
+          Campaña {{ fmt(activeInspection?.date) }} · {{ activeInspection?.inspector }}
+        </p>
+        <p v-if="activeInspection?.summary" class="mt-1 max-w-2xl text-sm text-ink-300">
+          {{ activeInspection.summary }}
+        </p>
+      </div>
+      <button
+        class="flex shrink-0 items-center gap-1.5 rounded-lg border border-ink-700 px-3 py-2 text-sm text-ink-300 hover:bg-ink-800"
+        @click="printReport"
+      >
+        <Printer :size="15" /> Informe
+      </button>
+    </header>
+
+    <!-- KPIs -->
+    <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
+      <!-- condición global (semáforo) -->
+      <div
+        class="rounded-xl border p-4"
+        :style="{ borderColor: condition.color + '55', background: condition.color + '12' }"
+      >
+        <div class="text-[11px] uppercase tracking-wide text-ink-400">Condición</div>
+        <div class="mt-1 flex items-baseline gap-2">
+          <span class="text-2xl font-bold" :style="{ color: condition.color }">
+            {{ structureCondition }}
+          </span>
+          <span class="text-xs text-ink-500">/100</span>
+        </div>
+        <div class="mt-1 flex items-center gap-1.5 text-xs" :style="{ color: condition.color }">
+          <span class="h-2 w-2 rounded-full" :style="{ background: condition.color }" />
+          {{ condition.label }}
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-ink-800 bg-ink-900 p-4">
+        <div class="text-[11px] uppercase tracking-wide text-ink-400">Hallazgos</div>
+        <div class="mt-1 text-2xl font-bold text-ink-100">{{ totalFindings }}</div>
+      </div>
+      <div class="rounded-xl border border-ink-800 bg-ink-900 p-4">
+        <div class="text-[11px] uppercase tracking-wide text-ink-400">Elem. afectados</div>
+        <div class="mt-1 text-2xl font-bold text-ink-100">{{ affectedEls }}</div>
+      </div>
+      <div class="rounded-xl border border-ink-800 bg-ink-900 p-4">
+        <div class="text-[11px] uppercase tracking-wide text-ink-400">Ensayos</div>
+        <div class="mt-1 text-2xl font-bold text-ink-100">{{ currentTests.length }}</div>
+      </div>
+      <div class="rounded-xl border border-ink-800 bg-ink-900 p-4">
+        <div class="text-[11px] uppercase tracking-wide text-ink-400">Fotos</div>
+        <div class="mt-1 text-2xl font-bold text-ink-100">{{ totalPhotos }}</div>
+      </div>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-2">
+      <!-- Distribución por severidad -->
+      <div class="rounded-xl border border-ink-800 bg-ink-900 p-4">
+        <h2 class="text-sm font-semibold text-ink-200">Distribución por severidad</h2>
+        <div v-if="sevTotal" class="mt-3 flex h-3 overflow-hidden rounded-full">
+          <div
+            v-for="s in sevLevels"
+            :key="s"
+            :style="{ width: sevPct(s) + '%', background: SEVERITY[s].color }"
+          />
+        </div>
+        <div v-else class="mt-3 text-xs text-ink-500">Sin daños registrados.</div>
+        <div class="mt-3 space-y-1.5">
+          <div
+            v-for="s in sevLevels"
+            :key="s"
+            class="flex items-center justify-between text-xs"
+          >
+            <div class="flex items-center gap-2">
+              <span class="h-2.5 w-2.5 rounded-sm" :style="{ background: SEVERITY[s].color }" />
+              <span class="text-ink-300">{{ SEVERITY[s].label }}</span>
+            </div>
+            <span class="font-medium text-ink-200">{{ severityCounts[s] }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Condición por campaña de inspección (comparación entre visitas periódicas) -->
+      <div class="rounded-xl border border-ink-800 bg-ink-900 p-4">
+        <h2 class="text-sm font-semibold text-ink-200">Condición por inspección</h2>
+        <div class="mt-4 flex h-32 items-end gap-3">
+          <div
+            v-for="c in conditionByCampaign"
+            :key="c.id"
+            class="flex flex-1 flex-col items-center gap-1"
+          >
+            <span class="text-xs font-semibold" :style="{ color: CONDITION[c.key].color }">
+              {{ c.score }}
+            </span>
+            <div
+              class="w-full rounded-t transition-all"
+              :style="{
+                height: (c.score / maxCampaignScore) * 90 + 'px',
+                background: CONDITION[c.key].color,
+                minHeight: '4px',
+              }"
+            />
+            <span class="text-[10px] text-ink-500">{{ fmt(c.date).replace(/ de \d+/, '') }}</span>
+          </div>
+        </div>
+        <p class="mt-2 text-[11px] text-ink-500">Mayor índice = peor condición.</p>
+      </div>
+    </div>
+
+    <!-- Hallazgos priorizados -->
+    <div class="rounded-xl border border-ink-800 bg-ink-900">
+      <div class="border-b border-ink-800 px-4 py-3">
+        <h2 class="text-sm font-semibold text-ink-200">Hallazgos priorizados</h2>
+      </div>
+      <div v-if="!prioritized.length" class="px-4 py-8 text-center text-sm text-ink-500">
+        Sin hallazgos a la fecha de esta campaña.
+      </div>
+      <div v-else class="divide-y divide-ink-800">
+        <div
+          v-for="f in prioritized"
+          :key="f.id"
+          class="flex items-center gap-4 px-4 py-3 hover:bg-ink-850"
+        >
+          <div
+            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+            :style="{ background: SEVERITY[f.severity].color + '22', color: SEVERITY[f.severity].color }"
+          >
+            <component :is="damageIcon[f.damageType]" :size="18" />
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-medium text-ink-100">
+                {{ DAMAGE_TYPES[f.damageType].label }}
+              </span>
+              <span class="text-xs text-ink-500">· {{ tagOf[f.elementId] ?? f.elementId }}</span>
+            </div>
+            <p v-if="f.notes" class="truncate text-xs text-ink-400">{{ f.notes }}</p>
+          </div>
+          <div class="flex shrink-0 items-center gap-3 text-xs">
+            <div class="hidden gap-1 sm:flex">
+              <img
+                v-for="p in f.photos.slice(0, 2)"
+                :key="p.id"
+                :src="p.dataUrl || p.url"
+                class="h-9 w-9 rounded object-cover"
+              />
+            </div>
+            <div class="text-right">
+              <div class="text-ink-400">Ext {{ f.extension }}%</div>
+              <div class="text-ink-500">Índice {{ findingIndex(f) }}</div>
+            </div>
+            <span
+              class="rounded px-1.5 py-0.5 text-[11px] font-semibold"
+              :style="{ background: SEVERITY[f.severity].color + '22', color: SEVERITY[f.severity].color }"
+            >
+              {{ SEVERITY[f.severity].label }}
+            </span>
+            <button
+              class="rounded-md border border-ink-700 px-2 py-1 text-ink-300 hover:bg-ink-800"
+              @click="viewIn3D(f.elementId)"
+            >
+              Ver en 3D
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ensayos -->
+    <div class="rounded-xl border border-ink-800 bg-ink-900">
+      <div class="border-b border-ink-800 px-4 py-3">
+        <h2 class="text-sm font-semibold text-ink-200">Ensayos</h2>
+      </div>
+      <div v-if="!currentTests.length" class="px-4 py-8 text-center text-sm text-ink-500">
+        Sin ensayos registrados en esta campaña.
+      </div>
+      <div v-else class="divide-y divide-ink-800">
+        <div v-for="t in currentTests" :key="t.id" class="px-4 py-3">
+          <div class="flex items-center justify-between">
+            <span class="flex items-center gap-2 text-sm font-medium text-ink-100">
+              <FlaskConical :size="15" class="text-ink-400" /> {{ t.testType }}
+            </span>
+            <span class="text-xs text-ink-500">{{ fmt(t.executedAt) }}</span>
+          </div>
+          <div class="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-ink-400">
+            <span v-if="t.method">Método: {{ t.method }}</span>
+            <span v-if="t.standard">Norma: {{ t.standard }}</span>
+            <span v-if="t.laboratory">Lab: {{ t.laboratory }}</span>
+            <span v-if="t.sampleLocation">Muestra: {{ tagOf[t.sampleLocation] ?? t.sampleLocation }}</span>
+          </div>
+          <p class="mt-1 text-sm text-ink-200">{{ t.resultSummary }}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</template>
