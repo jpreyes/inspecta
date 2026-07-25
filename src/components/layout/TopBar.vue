@@ -10,12 +10,13 @@ const store = useInspectionStore()
 const { activeStructure, structureCondition, asOfDate, activeView, activeHasModel } =
   storeToRefs(store)
 
+// Índice de SALUD (100 = sano): verde alto, rojo bajo.
 const conditionColor = computed(() => {
   const c = structureCondition.value
-  if (c >= 75) return '#ef4444'
-  if (c >= 50) return '#f97316'
-  if (c >= 25) return '#eab308'
-  return '#22c55e'
+  if (c >= 75) return '#22c55e'
+  if (c >= 40) return '#eab308'
+  if (c >= 20) return '#f97316'
+  return '#ef4444'
 })
 </script>
 

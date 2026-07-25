@@ -167,7 +167,7 @@ function printReport() {
             <span class="text-[10px] text-ink-500">{{ fmt(c.date).replace(/ de \d+/, '') }}</span>
           </div>
         </div>
-        <p class="mt-2 text-[11px] text-ink-500">Mayor índice = peor condición.</p>
+        <p class="mt-2 text-[11px] text-ink-500">Índice de salud: 100 = sano · 0 = crítico.</p>
       </div>
     </div>
 

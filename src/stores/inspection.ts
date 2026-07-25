@@ -166,8 +166,10 @@ export const useInspectionStore = defineStore('inspection', () => {
     findingsAsOf.value.filter((f) => f.elementId === selectedElementId.value),
   )
 
-  /** Calificación global (0 sano → 100 crítico) de la campaña activa. */
-  const structureCondition = computed(() => inspectionScore(currentFindings.value))
+  /** Índice de salud global (0 crítico → 100 sano) de la campaña activa. */
+  const structureCondition = computed(() =>
+    inspectionScore(currentFindings.value, activeStructure.value?.type),
+  )
 
   /** Condición semáforo (operativa/observación/crítica) derivada del índice. */
   const structureConditionKey = computed(() => conditionFromScore(structureCondition.value))
@@ -176,7 +178,7 @@ export const useInspectionStore = defineStore('inspection', () => {
   const conditionByCampaign = computed(() =>
     structureInspections.value.map((insp) => {
       const fs = findings.value.filter((f) => f.inspectionId === insp.id)
-      const score = inspectionScore(fs)
+      const score = inspectionScore(fs, activeStructure.value?.type)
       return { id: insp.id, date: insp.date, score, key: conditionFromScore(score) }
     }),
   )

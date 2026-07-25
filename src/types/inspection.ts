@@ -178,18 +178,20 @@ export const CONDITION = {
 } as const
 export type ConditionKey = keyof typeof CONDITION
 
-/** Deriva la condición global (semáforo) desde el índice de condición 0–100. */
-export function conditionFromScore(score: number): ConditionKey {
-  if (score >= 60) return 'critica'
-  if (score >= 25) return 'observacion'
+/** Deriva la condición global (semáforo) desde el índice de SALUD 0–100
+ *  (100 = sano). <40 crítica · 40–75 con observaciones · ≥75 operativa. */
+export function conditionFromScore(health: number): ConditionKey {
+  if (health < 40) return 'critica'
+  if (health < 75) return 'observacion'
   return 'operativa'
 }
 
-// ── Scoring determinístico ponderado ─────────────────────────
-// La calificación depende de: severidad, extensión, tipo de daño, elemento,
-// zona en el elemento, causa y cantidad de deterioros. Cada dimensión aporta
-// un peso; entradas "Otro"/desconocidas usan el peso neutro DEFAULT_WEIGHT.
-// Los pesos son calibrables (mayor = más crítico).
+// ── Scoring determinístico ponderado (índice de SALUD 0–100) ──
+// Modelo jerárquico: hallazgo → elemento → estructura, con agregadores distintos
+// para puente (serie/peor-caso) y edificio (redundante/ponderado + override).
+// Fuentes: España (G·K1·K2), AASHTO/BCI, PCI deduct, ATC-20/EMS-98 (estructural
+// vs no estructural). La CAUSA no entra en la condición: alimenta el riesgo.
+// Pesos calibrables; entradas "Otro"/desconocidas usan DEFAULT_WEIGHT.
 
 const DEFAULT_WEIGHT = 1.0
 
@@ -367,76 +369,137 @@ function weightOf(map: Record<string, number>, key?: string): number {
 }
 
 /**
- * Índice/calificación de un hallazgo (0 sano → 100 crítico), combinando
- * severidad × extensión × pesos (tipo, elemento, zona, causa).
+ * Índice de DAÑO de un hallazgo, 0 (sano) → 100 (crítico). Combina
+ * severidad × extensión × criticidad del tipo de daño y de la zona.
+ * La causa NO entra aquí (alimenta el módulo de riesgo/pronóstico).
  */
 export function findingIndex(
-  f: Pick<Finding, 'severity' | 'extension' | 'damageType' | 'element' | 'zone' | 'cause'>,
+  f: Pick<Finding, 'severity' | 'extension' | 'damageType' | 'zone'>,
 ): number {
+  return Math.round(100 * findingDamage(f))
+}
+
+/** Daño de un hallazgo en 0–1 (0 sano … 1 destruido). */
+function findingDamage(f: Pick<Finding, 'severity' | 'extension' | 'damageType' | 'zone'>): number {
   if (!f.severity) return 0
-  const factor =
-    (weightOf(DAMAGE_TYPE_WEIGHT, f.damageType) +
-      weightOf(ELEMENT_WEIGHT, f.element) +
-      weightOf(ZONE_WEIGHT, f.zone) +
-      weightOf(CAUSE_WEIGHT, f.cause)) /
-    4
+  const sev = f.severity / 4 // 0,25 … 1
   const ext = Math.min(Math.max(f.extension, 0), 100) / 100
-  const extFactor = 0.6 + 0.4 * ext
-  return Math.min(100, Math.round(25 * f.severity * factor * extFactor))
+  const extF = 0.4 + 0.6 * ext // la extensión modula; la severidad domina
+  const typeF = weightOf(DAMAGE_TYPE_WEIGHT, f.damageType) // criticidad del deterioro
+  const zoneF = weightOf(ZONE_WEIGHT, f.zone) // zona crítica vs cosmética
+  return Math.min(1, sev * extF * (0.5 * typeF + 0.5 * zoneF))
 }
 
-// Parámetros de agregación (calibrables). Inspirados en PCI (ASTM D6433) y
-// AASHTO element inspection: cantidad por extensión, rendimientos decrecientes
-// con tope, y el peor daño como piso.
-const CUMULATIVE_TAU = 5 // menor = la cantidad de daños distintos pesa más rápido
-const ZONE_MAX = 2 // tope al multiplicador por múltiples zonas del mismo daño
-const ZONE_GAIN = 0.25 // cuánto sube por duplicar el nº de zonas
-
-/** "Daño distinto" = mismo tipo de daño en el mismo tipo de elemento (la zona no
- *  crea un daño nuevo; varias zonas suman con tope, ver `inspectionScore`). */
-function distinctKey(f: Finding): string {
-  return `${f.element}||${f.damageType}`
+/** Factor de riesgo/pronóstico por causa (para priorización futura; NO entra en
+ *  la condición actual, siguiendo la separación difettosità/vulnerabilità). */
+export function causeRiskFactor(cause?: string): number {
+  return weightOf(CAUSE_WEIGHT, cause)
 }
 
-/**
- * Factor por múltiples zonas/registros de un MISMO daño: crece con rendimientos
- * decrecientes y satura en `ZONE_MAX`. 1 zona→1.0, 2→1.25, 4→1.5, 8→1.75, ≥16→2.0.
- */
-function zoneFactor(count: number): number {
-  return Math.min(ZONE_MAX, 1 + ZONE_GAIN * Math.log2(Math.max(1, count)))
+// ── Agregación jerárquica (España G·K1·K2 + peor-caso amortiguado + override) ──
+const ZONE_MAX = 1.6 // tope al multiplicador por repetir el mismo daño en varias zonas
+const ZONE_GAIN = 0.2
+const ELEM_AMORT = 0.3 // atenuación de los daños adicionales dentro de un elemento
+const NONSTRUCT_CAP = 0.35 // los daños no estructurales no bajan la salud más que esto
+const GOV_EDIF = 0.85 // cuánto puede un elemento primario dañado gobernar el índice
+const GOV_PUENTE = 0.95 // en puente (sistema en serie) el peor-caso pesa más
+
+/** Multiplicador por nº de zonas del mismo daño, con rendimientos decrecientes y
+ *  tope: 1→1.0, 2→1.2, 4→1.4, 8→1.6, ≥16→1.6 (no satura sin límite). */
+function zoneMult(nZones: number): number {
+  return Math.min(ZONE_MAX, 1 + ZONE_GAIN * Math.log2(Math.max(1, nZones)))
 }
 
-/**
- * Calificación de una campaña (0–100). Combina, vía noisy-OR:
- *  - el **peor deterioro** (piso: la condición nunca es mejor que el peor daño), y
- *  - la **carga acumulada** de los daños **distintos** (elemento+tipo). Cada daño
- *    en varias zonas suma más, pero con **rendimientos decrecientes y tope**
- *    (no satura). Registrar el mismo daño 100 veces ≈ el tope, no 100×.
- *
- * condición = 1 − (1 − peor) · exp(−carga / τ)
- */
-export function inspectionScore(findings: Finding[]): number {
-  if (!findings.length) return 0
-  // agrupa por daño distinto: peor índice del grupo + nº de zonas/registros
-  const groups = new Map<string, { worst: number; count: number }>()
+/** Combina varios daños (0–1): el peor domina, el resto atenuado. Nunca > 1. */
+function combineAmortiguado(damages: number[], amort: number): number {
+  if (!damages.length) return 0
+  const sorted = [...damages].sort((a, b) => b - a)
+  let d = sorted[0]
+  for (let i = 1; i < sorted.length; i++) d += amort * sorted[i]
+  return Math.min(1, d)
+}
+
+/** Daño (0–1) de un elemento a partir de sus hallazgos: colapsa repeticiones del
+ *  mismo deterioro (varias zonas suman con tope) y combina deterioros distintos. */
+function elementDamage(findings: Finding[]): number {
+  const byDamage = new Map<string, { worst: number; zones: Set<string> }>()
   for (const f of findings) {
-    const k = distinctKey(f)
-    const fi = findingIndex(f)
-    const g = groups.get(k)
-    if (!g) groups.set(k, { worst: fi, count: 1 })
+    const d = findingDamage(f)
+    const g = byDamage.get(f.damageType)
+    if (!g) byDamage.set(f.damageType, { worst: d, zones: new Set([f.zone ?? '—']) })
     else {
-      g.worst = Math.max(g.worst, fi)
-      g.count++
+      g.worst = Math.max(g.worst, d)
+      g.zones.add(f.zone ?? '—')
     }
   }
-  let worst = 0
-  let load = 0
-  for (const g of groups.values()) {
-    worst = Math.max(worst, g.worst)
-    load += (g.worst / 100) * zoneFactor(g.count) // aporte del grupo, con tope
+  const perDamage = [...byDamage.values()].map((g) => Math.min(1, g.worst * zoneMult(g.zones.size)))
+  return combineAmortiguado(perDamage, ELEM_AMORT)
+}
+
+// Elementos primarios (trayectoria de carga) y no estructurales, por tipo de estructura.
+const PRIMARY_EDIF = new Set([
+  'Columna / Pilar', 'Muro estructural / de corte', 'Viga de acople (dintel de acople)',
+  'Muro de albañilería confinada', 'Muro de albañilería armada', 'Machón', 'Muro de contención',
+  'Viga', 'Dintel', 'Nudo viga-columna', 'Voladizo / balcón',
+  'Zapata aislada', 'Zapata corrida', 'Viga de fundación', 'Losa de fundación (radier)',
+  'Pilote', 'Cabezal de pilotes', 'Sobrecimiento', 'Muro de subterráneo',
+  'Anclaje', 'Conexión soldada', 'Conexión apernada', 'Empalme de armadura',
+])
+const NONSTRUCT_EDIF = new Set(['Tabique', 'Antepecho / parapeto'])
+const PRIMARY_PUENTE = new Set([
+  'Vigas', 'Longuerina', 'Voladizo', 'Aparato de apoyo', 'Columnas', 'Fundación',
+  'Muro frontal portante', 'Cabezal superior', 'Cabezal inferior', 'Losa',
+  'Travesaño Apoyo', 'Travesaño intermedia', 'Anclaje de pretensado', 'Anclaje / placa base',
+])
+
+/** Roll-up edificio (redundante): promedio ponderado por importancia + override
+ *  por elemento primario dañado + firewall no estructural. Devuelve daño 0–1. */
+function buildingDamage(elems: { name: string; dmg: number }[]): number {
+  let wsum = 0
+  let wdmg = 0
+  let primaryWorst = 0
+  for (const e of elems) {
+    const dmg = NONSTRUCT_EDIF.has(e.name) ? Math.min(e.dmg, NONSTRUCT_CAP) : e.dmg
+    const w = weightOf(ELEMENT_WEIGHT, e.name)
+    wsum += w
+    wdmg += w * dmg
+    if (PRIMARY_EDIF.has(e.name)) primaryWorst = Math.max(primaryWorst, e.dmg)
   }
-  const combined = 1 - (1 - worst / 100) * Math.exp(-load / CUMULATIVE_TAU)
-  return Math.min(100, Math.round(combined * 100))
+  const avg = wsum ? wdmg / wsum : 0
+  return Math.min(1, Math.max(avg, primaryWorst * GOV_EDIF))
+}
+
+/** Roll-up puente (serie): igual, pero con peor-caso más fuerte. Devuelve daño 0–1. */
+function bridgeDamage(elems: { name: string; dmg: number }[]): number {
+  let wsum = 0
+  let wdmg = 0
+  let primaryWorst = 0
+  for (const e of elems) {
+    const w = weightOf(ELEMENT_WEIGHT, e.name)
+    wsum += w
+    wdmg += w * e.dmg
+    if (PRIMARY_PUENTE.has(e.name)) primaryWorst = Math.max(primaryWorst, e.dmg)
+  }
+  const avg = wsum ? wdmg / wsum : 0
+  return Math.min(1, Math.max(avg, primaryWorst * GOV_PUENTE))
+}
+
+/**
+ * Índice de SALUD de la campaña, 0 (crítico) → 100 (sano). Agrega los hallazgos
+ * por elemento y luego a la estructura con el modelo del tipo correspondiente
+ * (puente = serie/peor-caso; edificio = redundante/ponderado + override).
+ */
+export function inspectionScore(findings: Finding[], structureType?: string): number {
+  if (!findings.length) return 100
+  const byElement = new Map<string, Finding[]>()
+  for (const f of findings) {
+    const arr = byElement.get(f.element)
+    if (arr) arr.push(f)
+    else byElement.set(f.element, [f])
+  }
+  const elems = [...byElement.entries()].map(([name, fs]) => ({ name, dmg: elementDamage(fs) }))
+  const damage = structureType === 'puente' ? bridgeDamage(elems) : buildingDamage(elems)
+  return Math.round(100 * (1 - damage))
 }
 
 /** Peor severidad activa de un conjunto de hallazgos. */
