@@ -1070,9 +1070,11 @@ export const CATALOG: Record<string, StructureCatalog> = {
             ],
             "zones": [
               "Base",
-              "Tercio central",
-              "Cabeza/extremo",
+              "Cuerpo/paño",
+              "Coronación",
+              "Encuentro",
               "Cara vista",
+              "Junta",
               "Otro"
             ]
           },
@@ -1082,9 +1084,9 @@ export const CATALOG: Record<string, StructureCatalog> = {
               "Hormigón armado"
             ],
             "zones": [
-              "Base",
-              "Tercio central",
-              "Cabeza/extremo",
+              "Coronación",
+              "Cuerpo",
+              "Encuentro con losa",
               "Cara vista",
               "Otro"
             ]
@@ -1096,9 +1098,11 @@ export const CATALOG: Record<string, StructureCatalog> = {
             ],
             "zones": [
               "Base",
-              "Tercio central",
-              "Cabeza/extremo",
+              "Cuerpo/paño",
+              "Coronación",
+              "Encuentro",
               "Cara vista",
+              "Junta",
               "Otro"
             ]
           }
@@ -1107,19 +1111,6 @@ export const CATALOG: Record<string, StructureCatalog> = {
       {
         "component": "Líneas de apoyo",
         "elements": [
-          {
-            "element": "Líneas_de_apoyo",
-            "materials": [
-              "Hormigón armado"
-            ],
-            "zones": [
-              "Base",
-              "Tercio central",
-              "Cabeza/extremo",
-              "Cara vista",
-              "Otro"
-            ]
-          },
           {
             "element": "Aparato de apoyo",
             "materials": [
@@ -1138,10 +1129,8 @@ export const CATALOG: Record<string, StructureCatalog> = {
               "Hormigón armado"
             ],
             "zones": [
-              "Base",
-              "Tercio central",
-              "Cabeza/extremo",
-              "Cara vista",
+              "Cuerpo",
+              "Contacto con apoyo",
               "Otro"
             ]
           }
@@ -1183,28 +1172,15 @@ export const CATALOG: Record<string, StructureCatalog> = {
         "component": "Muro ala",
         "elements": [
           {
-            "element": "Muro_ala",
-            "materials": [
-              "Hormigón armado"
-            ],
-            "zones": [
-              "Base",
-              "Tercio central",
-              "Cabeza/extremo",
-              "Cara vista",
-              "Otro"
-            ]
-          },
-          {
             "element": "Línea de contención",
             "materials": [
               "Hormigón armado"
             ],
             "zones": [
-              "Base",
-              "Tercio central",
-              "Cabeza/extremo",
+              "Tramo",
+              "Anclaje",
               "Cara vista",
+              "Junta",
               "Otro"
             ]
           },
@@ -1215,9 +1191,11 @@ export const CATALOG: Record<string, StructureCatalog> = {
             ],
             "zones": [
               "Base",
-              "Tercio central",
-              "Cabeza/extremo",
+              "Cuerpo/paño",
+              "Coronación",
+              "Encuentro",
               "Cara vista",
+              "Junta",
               "Otro"
             ]
           }
@@ -1246,10 +1224,11 @@ export const CATALOG: Record<string, StructureCatalog> = {
               "Hormigón armado"
             ],
             "zones": [
-              "Base",
-              "Tercio central",
-              "Cabeza/extremo",
-              "Cara vista",
+              "Apoyo",
+              "Centro",
+              "Voladizo",
+              "Cara inferior",
+              "Nudo",
               "Otro"
             ]
           },
@@ -1259,10 +1238,11 @@ export const CATALOG: Record<string, StructureCatalog> = {
               "Hormigón armado"
             ],
             "zones": [
-              "Base",
-              "Tercio central",
-              "Cabeza/extremo",
-              "Cara vista",
+              "Apoyo",
+              "Centro",
+              "Voladizo",
+              "Cara inferior",
+              "Nudo",
               "Otro"
             ]
           },
@@ -1286,10 +1266,9 @@ export const CATALOG: Record<string, StructureCatalog> = {
               "Hormigón armado"
             ],
             "zones": [
-              "Base",
-              "Tercio central",
-              "Cabeza/extremo",
-              "Cara vista",
+              "Tramo",
+              "Nudo/conexión",
+              "Anclaje",
               "Otro"
             ]
           },
@@ -1300,10 +1279,10 @@ export const CATALOG: Record<string, StructureCatalog> = {
               "Hormigón pretensado/postensado"
             ],
             "zones": [
-              "Base",
-              "Tercio central",
-              "Cabeza/extremo",
-              "Cara vista",
+              "Empotramiento",
+              "Extremo",
+              "Cara inferior",
+              "Anclaje de pretensado",
               "Otro"
             ]
           },
@@ -1314,10 +1293,10 @@ export const CATALOG: Record<string, StructureCatalog> = {
               "Hormigón pretensado/postensado"
             ],
             "zones": [
-              "Base",
-              "Tercio central",
-              "Cabeza/extremo",
-              "Cara vista",
+              "Apoyo",
+              "Centro de vano",
+              "Fondo",
+              "Anclaje de pretensado",
               "Otro"
             ]
           },
@@ -1328,10 +1307,10 @@ export const CATALOG: Record<string, StructureCatalog> = {
               "Hormigón pretensado/postensado"
             ],
             "zones": [
-              "Base",
-              "Tercio central",
-              "Cabeza/extremo",
-              "Cara vista",
+              "Apoyo",
+              "Centro de vano",
+              "Fondo",
+              "Anclaje de pretensado",
               "Otro"
             ]
           },
@@ -1384,10 +1363,9 @@ export const CATALOG: Record<string, StructureCatalog> = {
               "Acero"
             ],
             "zones": [
-              "Base",
-              "Tercio central",
-              "Cabeza/extremo",
+              "Nudo",
               "Cara vista",
+              "Conexión",
               "Otro"
             ]
           }

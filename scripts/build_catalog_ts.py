@@ -171,6 +171,9 @@ def build_puente():
         "Voladizo": [HA, HP], "Travesaño intermedia": [HA, HP], "Travesaño Apoyo": [HA, HP],
         "Contraventación": [AC], "Vigas": [HA, HP, AC], "Losa": [HA, HP], "Cartela": [HA, AC],
     }
+    _wall = ["Base", "Cuerpo/paño", "Coronación", "Encuentro", "Cara vista", "Junta", "Otro"]
+    _cap = ["Apoyo", "Centro", "Voladizo", "Cara inferior", "Nudo", "Otro"]
+    _travesano = ["Apoyo", "Centro de vano", "Fondo", "Anclaje de pretensado", "Otro"]
     br_zone = {
         "default": ["Base", "Tercio central", "Cabeza/extremo", "Cara vista", "Otro"],
         "Columnas": ["Base", "Anclaje / placa base", "Fuste/tercio central", "Cabeza/capitel", "Nudo", "Otro"],
@@ -181,6 +184,21 @@ def build_puente():
         "Aparato de apoyo": ["Cuerpo", "Anclaje", "Otro"],
         "Diagonal": ["Tramo", "Nudo/conexión", "Anclaje", "Otro"],
         "Contraventación": ["Tramo", "Conexión", "Anclaje", "Otro"],
+        # muros y elementos tipo pantalla
+        "Muro frontal portante": _wall,
+        "Guardalastres": ["Coronación", "Cuerpo", "Encuentro con losa", "Cara vista", "Otro"],
+        "Alas": _wall,
+        "Línea de contención": ["Tramo", "Anclaje", "Cara vista", "Junta", "Otro"],
+        "Cama de nivelación": ["Cuerpo", "Contacto con apoyo", "Otro"],
+        # cabezales (pier cap / cordones)
+        "Cabezal superior": _cap,
+        "Cabezal inferior": _cap,
+        # travesaños, voladizo, cartela, montante
+        "Travesaño intermedia": _travesano,
+        "Travesaño Apoyo": _travesano,
+        "Voladizo": ["Empotramiento", "Extremo", "Cara inferior", "Anclaje de pretensado", "Otro"],
+        "Cartela": ["Nudo", "Cara vista", "Conexión", "Otro"],
+        "Montante": ["Tramo", "Nudo/conexión", "Anclaje", "Otro"],
     }
     comps = []
     for c in range(6):
@@ -191,7 +209,8 @@ def build_puente():
         seen = set()
         for r in range(2, len(rows)):
             e = clean(rows[r][c])
-            if not e or e == name or e in seen:
+            # descarta vacíos, duplicados y filas "nombre_del_componente" (con _)
+            if not e or e == name or e.replace("_", " ") == name or e in seen:
                 continue
             seen.add(e)
             elems.append({"element": e, "materials": br_mat.get(e, [HA]),
