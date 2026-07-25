@@ -13,6 +13,11 @@ migrate(
       cascadeDelete: true,
       collectionId: users.id,
     })
+    // Timestamps de sistema (PocketBase 0.23+ ya no los agrega solo).
+    const stamps = () => [
+      { name: 'created', type: 'autodate', onCreate: true, onUpdate: false },
+      { name: 'updated', type: 'autodate', onCreate: true, onUpdate: true },
+    ]
     // Reglas: cada usuario ve/edita solo lo suyo.
     const rules = {
       listRule: '@request.auth.id != "" && owner = @request.auth.id',
@@ -33,6 +38,7 @@ migrate(
         { name: 'lng', type: 'number' },
         { name: 'address', type: 'text' },
         owner(),
+        ...stamps(),
       ],
     })
     app.save(projects)
@@ -47,6 +53,7 @@ migrate(
         { name: 'stype', type: 'text' },
         { name: 'grid', type: 'json' },
         owner(),
+        ...stamps(),
       ],
     })
     app.save(structures)
@@ -63,6 +70,7 @@ migrate(
         { name: 'summary', type: 'text' },
         { name: 'condition_score', type: 'number' },
         owner(),
+        ...stamps(),
       ],
     })
     app.save(inspections)
@@ -90,6 +98,7 @@ migrate(
           thumbs: ['100x100', '600x0'], // miniatura + versión mediana
         },
         owner(),
+        ...stamps(),
       ],
     })
     app.save(findings)
@@ -108,6 +117,7 @@ migrate(
         { name: 'sample_location', type: 'text' },
         { name: 'result_summary', type: 'text' },
         owner(),
+        ...stamps(),
       ],
     })
     app.save(tests)

@@ -47,8 +47,9 @@ export const backend = {
 
   /** Trae registros remotos, opcionalmente los modificados desde `since` (ISO). */
   async pull(col: RemoteCollection, since?: string): Promise<Record<string, unknown>[]> {
-    const filter = since ? `updated >= "${since}"` : ''
-    return pb.collection(col).getFullList({ filter, sort: 'updated' })
+    const opts: { sort: string; filter?: string } = { sort: '-updated' }
+    if (since) opts.filter = `updated >= "${since}"`
+    return pb.collection(col).getFullList(opts)
   },
 
   /** Upsert por id (los ids son UUID generados en el cliente → estables). */

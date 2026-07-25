@@ -14,6 +14,12 @@ import { db, seedIfEmpty } from '../db'
 import { backend, type RemoteUser } from '../sync/backend'
 import { syncNow as runSync } from '../sync/engine'
 
+/** Copia plana (sin proxies reactivos de Vue). IndexedDB no puede clonar proxies
+ *  anidados (p.ej. las fotos dentro de un hallazgo), y se perdían al guardar. */
+function plain<T>(o: T): T {
+  return JSON.parse(JSON.stringify(o))
+}
+
 /** ID de 15 caracteres [a-z0-9] — compatible con los record ids de PocketBase,
  *  para que el mismo id sirva local y remoto. */
 function uid() {
@@ -225,7 +231,9 @@ export const useInspectionStore = defineStore('inspection', () => {
       syncMessage.value = `Enviados ${res.pushed} · Fotos ${res.photos} · Recibidos ${res.pulled}`
       return res
     } catch (e) {
-      syncMessage.value = 'Error: ' + (e instanceof Error ? e.message : String(e))
+      const err = e as { message?: string; status?: number; response?: { data?: unknown } }
+      const detail = err?.response?.data ? ' — ' + JSON.stringify(err.response.data) : ''
+      syncMessage.value = 'Error: ' + (err?.message ?? String(e)) + detail
       throw e
     } finally {
       syncing.value = false
@@ -266,7 +274,7 @@ export const useInspectionStore = defineStore('inspection', () => {
       ...payload,
     }
     findings.value.push(f)
-    await db.findings.add({ ...f })
+    await db.findings.add(plain(f))
     return f
   }
 
@@ -274,7 +282,7 @@ export const useInspectionStore = defineStore('inspection', () => {
     const f = findings.value.find((x) => x.id === id)
     if (!f) return
     Object.assign(f, patch)
-    await db.findings.put({ ...f })
+    await db.findings.put(plain(f))
   }
 
   async function removeFinding(id: string) {
@@ -290,7 +298,7 @@ export const useInspectionStore = defineStore('inspection', () => {
       ...payload,
     }
     inspections.value.push(insp)
-    await db.inspections.add({ ...insp })
+    await db.inspections.add(plain(insp))
     inspectionIndex.value = structureInspections.value.length - 1
     return insp
   }
