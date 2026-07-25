@@ -32,9 +32,11 @@ edif_components = {
     ],
     "Muros estructurales": [
         ("Muro estructural / de corte", [HA], "Base; Coronación; Paño central; Encuentro/esquina; Vano/abertura; Otro"),
+        ("Viga de acople (dintel de acople)", [HA], "Empotramiento en muro; Tramo/centro; Armadura diagonal; Otro"),
         ("Machón", [HA, ALBC], "Base; Cuerpo; Encuentro; Otro"),
         ("Muro de albañilería confinada", [ALBC], "Paño central; Encuentro; Base; Bajo cadena/pilar; Vano; Otro"),
         ("Muro de albañilería armada", [ALBA], "Paño central; Encuentro; Base; Vano; Otro"),
+        ("Muro de contención", [HA], "Coronación; Fuste/pantalla; Base/empotramiento; Puntera; Talón; Junta; Drenaje/barbacana; Otro"),
     ],
     "Pilares y columnas": [
         ("Columna / Pilar", [HA, AC, MA, MX], "Base; Anclaje / placa base; Tercio central; Cabeza/capitel; Nudo; Empalme; Otro"),
@@ -45,7 +47,7 @@ edif_components = {
         ("Dintel", [HA, AC, ALBC], "Centro; Apoyo; Otro"),
     ],
     "Losas y entrepisos": [
-        ("Losa", [HA, HP], "Centro de paño; Borde/perímetro; Cara inferior; Cara superior; Junta; Otro"),
+        ("Losa", [HA, HP], "Centro de paño; Borde/perímetro; Cara inferior; Cara superior; Junta; Perforación/paso de instalaciones; Zona de punzonamiento (sobre columna); Otro"),
         ("Losa colaborante", [MX], "Centro de paño; Apoyo; Conexión de corte; Otro"),
         ("Vigueta", [HA, HP, AC, MA], "Apoyo; Centro de vano; Fondo; Otro"),
         ("Voladizo / balcón", [HA], "Empotramiento; Extremo; Cara inferior; Otro"),
@@ -66,8 +68,10 @@ edif_components = {
     ],
     "Techumbre estructural": [
         ("Cercha", [AC, MA], "Cordón superior; Cordón inferior; Diagonal; Montante; Nudo; Anclaje/apoyo; Otro"),
+        ("Tijeral", [MA, AC], "Cordón superior; Cordón inferior; Diagonal; Pendolón; Nudo; Apoyo/anclaje; Otro"),
         ("Viga de techo", [AC, MA, HA], "Apoyo; Centro de vano; Anclaje; Otro"),
         ("Costanera / correa", [AC, MA], "Apoyo; Tramo; Conexión; Otro"),
+        ("Entramado / diafragma de techumbre", [MA, AC], "Paño; Arriostramiento; Encuentro/anclaje; Otro"),
         ("Losa de cubierta", [HA], "Centro de paño; Borde; Junta; Otro"),
     ],
     "Tabiquería": [

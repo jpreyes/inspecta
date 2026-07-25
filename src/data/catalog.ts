@@ -136,6 +136,18 @@ export const CATALOG: Record<string, StructureCatalog> = {
             ]
           },
           {
+            "element": "Viga de acople (dintel de acople)",
+            "materials": [
+              "Hormigón armado"
+            ],
+            "zones": [
+              "Empotramiento en muro",
+              "Tramo/centro",
+              "Armadura diagonal",
+              "Otro"
+            ]
+          },
+          {
             "element": "Machón",
             "materials": [
               "Hormigón armado",
@@ -172,6 +184,22 @@ export const CATALOG: Record<string, StructureCatalog> = {
               "Encuentro",
               "Base",
               "Vano",
+              "Otro"
+            ]
+          },
+          {
+            "element": "Muro de contención",
+            "materials": [
+              "Hormigón armado"
+            ],
+            "zones": [
+              "Coronación",
+              "Fuste/pantalla",
+              "Base/empotramiento",
+              "Puntera",
+              "Talón",
+              "Junta",
+              "Drenaje/barbacana",
               "Otro"
             ]
           }
@@ -264,6 +292,8 @@ export const CATALOG: Record<string, StructureCatalog> = {
               "Cara inferior",
               "Cara superior",
               "Junta",
+              "Perforación/paso de instalaciones",
+              "Zona de punzonamiento (sobre columna)",
               "Otro"
             ]
           },
@@ -462,6 +492,22 @@ export const CATALOG: Record<string, StructureCatalog> = {
             ]
           },
           {
+            "element": "Tijeral",
+            "materials": [
+              "Madera",
+              "Acero"
+            ],
+            "zones": [
+              "Cordón superior",
+              "Cordón inferior",
+              "Diagonal",
+              "Pendolón",
+              "Nudo",
+              "Apoyo/anclaje",
+              "Otro"
+            ]
+          },
+          {
             "element": "Viga de techo",
             "materials": [
               "Acero",
@@ -485,6 +531,19 @@ export const CATALOG: Record<string, StructureCatalog> = {
               "Apoyo",
               "Tramo",
               "Conexión",
+              "Otro"
+            ]
+          },
+          {
+            "element": "Entramado / diafragma de techumbre",
+            "materials": [
+              "Madera",
+              "Acero"
+            ],
+            "zones": [
+              "Paño",
+              "Arriostramiento",
+              "Encuentro/anclaje",
               "Otro"
             ]
           },
