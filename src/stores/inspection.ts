@@ -6,10 +6,12 @@ import type {
   Project,
   Severity,
   Structure,
+  StructureType,
   Test,
   Vec3,
 } from '../types/inspection'
 import { conditionFromScore, hasModel, inspectionScore } from '../types/inspection'
+import { generateFrame } from '../data/generate'
 import { vulnerabilityIndex, riskLevel } from '../data/vulnerability'
 import { hazardIndex, type SiteConfig } from '../data/hazard'
 import { db, seedIfEmpty } from '../db'
@@ -343,6 +345,75 @@ export const useInspectionStore = defineStore('inspection', () => {
     await db.structures.put(plain(s))
   }
 
+  // ── CRUD de proyectos ──────────────────────────────────
+  async function addProject(payload: { name: string; client?: string }) {
+    const p: Project = {
+      id: uid(),
+      name: payload.name.trim(),
+      client: payload.client?.trim() || undefined,
+      createdAt: new Date().toISOString(),
+    }
+    projects.value.push(p)
+    await db.projects.add(plain(p))
+    return p
+  }
+  async function updateProject(id: string, patch: Partial<Project>) {
+    const p = projects.value.find((x) => x.id === id)
+    if (!p) return
+    Object.assign(p, patch)
+    await db.projects.put(plain(p))
+  }
+  async function removeProject(id: string) {
+    for (const s of structures.value.filter((s) => s.projectId === id)) await removeStructure(s.id)
+    projects.value = projects.value.filter((p) => p.id !== id)
+    await db.projects.delete(id)
+  }
+
+  // ── CRUD de estructuras ────────────────────────────────
+  async function addStructure(payload: {
+    projectId: string
+    name: string
+    type: StructureType
+    grid?: Structure['grid']
+  }) {
+    const s: Structure = {
+      id: uid(),
+      projectId: payload.projectId,
+      name: payload.name.trim(),
+      type: payload.type,
+      grid: payload.grid,
+      elements: payload.grid ? generateFrame(payload.grid) : [],
+    }
+    structures.value.push(s)
+    await db.structures.add(plain(s))
+    selectStructure(s.id)
+    return s
+  }
+  async function updateStructure(id: string, patch: Partial<Structure>) {
+    const s = structures.value.find((x) => x.id === id)
+    if (!s) return
+    Object.assign(s, patch)
+    await db.structures.put(plain(s))
+  }
+  async function removeStructure(id: string) {
+    const inspIds = inspections.value.filter((i) => i.structureId === id).map((i) => i.id)
+    findings.value = findings.value.filter((f) => !inspIds.includes(f.inspectionId))
+    tests.value = tests.value.filter((t) => !inspIds.includes(t.inspectionId))
+    inspections.value = inspections.value.filter((i) => i.structureId !== id)
+    structures.value = structures.value.filter((s) => s.id !== id)
+    if (inspIds.length) {
+      await db.findings.where('inspectionId').anyOf(inspIds).delete()
+      await db.tests.where('inspectionId').anyOf(inspIds).delete()
+    }
+    await db.inspections.where('structureId').equals(id).delete()
+    await db.structures.delete(id)
+    if (selectedStructureId.value === id) {
+      selectedStructureId.value = structures.value[0]?.id ?? null
+      selectedElementId.value = null
+      inspectionIndex.value = Math.max(0, structureInspections.value.length - 1)
+    }
+  }
+
   async function addInspection(payload: { inspector: string; date: string; summary?: string }) {
     if (!selectedStructureId.value) return
     const insp: Inspection = {
@@ -398,6 +469,12 @@ export const useInspectionStore = defineStore('inspection', () => {
     // acciones
     setIrregularity,
     setSite,
+    addProject,
+    updateProject,
+    removeProject,
+    addStructure,
+    updateStructure,
+    removeStructure,
     init,
     reload,
     selectStructure,
