@@ -3,6 +3,7 @@
 // Jerarquía:  Proyecto ▸ Estructura ▸ Elemento ▸ (Inspección ▸ Hallazgo)
 // ─────────────────────────────────────────────────────────────
 import { CATALOG, type CatalogElement, type StructureCatalog } from '../data/catalog'
+import type { SiteConfig } from '../data/hazard'
 
 export { CATALOG, MATERIALS } from '../data/catalog'
 export type { CatalogElement, CatalogComponent, CatalogDamage, StructureCatalog } from '../data/catalog'
@@ -96,6 +97,8 @@ export interface Structure {
   /** Vulnerabilidad por configuración: irregularidad(id del catálogo) → clase
    *  0 ausente · 1 moderada · 2 severa/extrema. Ver src/data/vulnerability.ts. */
   vulnerability?: Record<string, number>
+  /** Amenaza/exposición sísmica del sitio (NCh433). Ver src/data/hazard.ts. */
+  site?: SiteConfig
 }
 
 /** ¿La estructura tiene modelo 3D (geometría) para el gemelo digital? */
@@ -393,10 +396,21 @@ function findingDamage(f: Pick<Finding, 'severity' | 'extension' | 'damageType' 
   return Math.min(1, sev * extF * (0.5 * typeF + 0.5 * zoneF))
 }
 
-/** Factor de riesgo/pronóstico por causa (para priorización futura; NO entra en
- *  la condición actual, siguiendo la separación difettosità/vulnerabilità). */
+/** Factor de riesgo/pronóstico por causa (NO entra en la condición actual,
+ *  siguiendo la separación difettosità/vulnerabilità). Mayor = más agravante. */
 export function causeRiskFactor(cause?: string): number {
   return weightOf(CAUSE_WEIGHT, cause)
+}
+
+/**
+ * Prioridad de intervención de un hallazgo (0–100): combina el DAÑO actual con
+ * el factor de riesgo de su CAUSA (probabilidad/velocidad de agravamiento). Es un
+ * pronóstico para ordenar la intervención, distinto de la condición observada.
+ */
+export function findingPriority(
+  f: Pick<Finding, 'severity' | 'extension' | 'damageType' | 'zone' | 'cause'>,
+): number {
+  return Math.round(100 * Math.min(1, findingDamage(f) * causeRiskFactor(f.cause)))
 }
 
 // ── Agregación jerárquica (España G·K1·K2 + peor-caso amortiguado + override) ──
@@ -406,6 +420,7 @@ const ELEM_AMORT = 0.3 // atenuación de los daños adicionales dentro de un ele
 const NONSTRUCT_CAP = 0.35 // los daños no estructurales no bajan la salud más que esto
 const GOV_EDIF = 0.85 // cuánto puede un elemento primario dañado gobernar el índice
 const GOV_PUENTE = 0.95 // en puente (sistema en serie) el peor-caso pesa más
+const GOV_STORY = 0.9 // peor-piso: concentración de daño en un piso (tipo piso blando) gobierna
 
 /** Multiplicador por nº de zonas del mismo daño, con rendimientos decrecientes y
  *  tope: 1→1.0, 2→1.2, 4→1.4, 8→1.6, ≥16→1.6 (no satura sin límite). */
@@ -487,21 +502,47 @@ function bridgeDamage(elems: { name: string; dmg: number }[]): number {
   return Math.min(1, Math.max(avg, primaryWorst * GOV_PUENTE))
 }
 
-/**
- * Índice de SALUD de la campaña, 0 (crítico) → 100 (sano). Agrega los hallazgos
- * por elemento y luego a la estructura con el modelo del tipo correspondiente
- * (puente = serie/peor-caso; edificio = redundante/ponderado + override).
- */
-export function inspectionScore(findings: Finding[], structureType?: string): number {
-  if (!findings.length) return 100
+/** Agrupa hallazgos por tipo de elemento y devuelve el daño (0–1) de cada uno. */
+function elementDamages(findings: Finding[]): { name: string; dmg: number }[] {
   const byElement = new Map<string, Finding[]>()
   for (const f of findings) {
     const arr = byElement.get(f.element)
     if (arr) arr.push(f)
     else byElement.set(f.element, [f])
   }
-  const elems = [...byElement.entries()].map(([name, fs]) => ({ name, dmg: elementDamage(fs) }))
-  const damage = structureType === 'puente' ? bridgeDamage(elems) : buildingDamage(elems)
+  return [...byElement.entries()].map(([name, fs]) => ({ name, dmg: elementDamage(fs) }))
+}
+
+/**
+ * Índice de SALUD de la campaña, 0 (crítico) → 100 (sano). Agrega los hallazgos
+ * por elemento y luego a la estructura con el modelo del tipo correspondiente:
+ *  - puente = serie/peor-caso;
+ *  - edificio = redundante/ponderado + override, y si se conocen los pisos
+ *    (vía `elements`), **agregación por piso con peor-piso gobernante** (la
+ *    concentración de daño en un piso, tipo piso blando, pesa más que repartida).
+ */
+export function inspectionScore(
+  findings: Finding[],
+  structureType?: string,
+  elements?: Element[],
+): number {
+  if (!findings.length) return 100
+  if (structureType === 'puente') {
+    return Math.round(100 * (1 - bridgeDamage(elementDamages(findings))))
+  }
+  // edificio: si hay info de piso, agrega por piso; si no, todo en un grupo.
+  const storyOf = new Map((elements ?? []).map((e) => [e.id, e.story ?? 0]))
+  const byStory = new Map<number | string, Finding[]>()
+  for (const f of findings) {
+    const st = f.elementId != null && storyOf.has(f.elementId) ? storyOf.get(f.elementId)! : '—'
+    const arr = byStory.get(st)
+    if (arr) arr.push(f)
+    else byStory.set(st, [f])
+  }
+  const storyDamages = [...byStory.values()].map((fs) => buildingDamage(elementDamages(fs)))
+  const avg = storyDamages.reduce((a, b) => a + b, 0) / storyDamages.length
+  const worst = Math.max(...storyDamages)
+  const damage = Math.min(1, Math.max(avg, worst * GOV_STORY))
   return Math.round(100 * (1 - damage))
 }
 

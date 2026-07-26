@@ -11,6 +11,7 @@ import type {
 } from '../types/inspection'
 import { conditionFromScore, hasModel, inspectionScore } from '../types/inspection'
 import { vulnerabilityIndex, riskLevel } from '../data/vulnerability'
+import { hazardIndex, type SiteConfig } from '../data/hazard'
 import { db, seedIfEmpty } from '../db'
 import { backend, type RemoteUser } from '../sync/backend'
 import { syncNow as runSync } from '../sync/engine'
@@ -169,7 +170,7 @@ export const useInspectionStore = defineStore('inspection', () => {
 
   /** Índice de salud global (0 crítico → 100 sano) de la campaña activa. */
   const structureCondition = computed(() =>
-    inspectionScore(currentFindings.value, activeStructure.value?.type),
+    inspectionScore(currentFindings.value, activeStructure.value?.type, activeStructure.value?.elements),
   )
 
   /** Condición semáforo (operativa/observación/crítica) derivada del índice. */
@@ -180,16 +181,19 @@ export const useInspectionStore = defineStore('inspection', () => {
     vulnerabilityIndex(activeStructure.value?.vulnerability),
   )
 
-  /** Riesgo/prioridad = matriz(condición, vulnerabilidad) de la campaña activa. */
+  /** Índice de amenaza/exposición sísmica del sitio (0 sin datos → 100). */
+  const structureHazard = computed(() => hazardIndex(activeStructure.value?.site))
+
+  /** Riesgo/prioridad = f(condición, vulnerabilidad, amenaza) de la campaña activa. */
   const structureRisk = computed(() =>
-    riskLevel(structureCondition.value, structureVulnerability.value),
+    riskLevel(structureCondition.value, structureVulnerability.value, structureHazard.value),
   )
 
   /** Condición por campaña de inspección — comparación entre visitas periódicas. */
   const conditionByCampaign = computed(() =>
     structureInspections.value.map((insp) => {
       const fs = findings.value.filter((f) => f.inspectionId === insp.id)
-      const score = inspectionScore(fs, activeStructure.value?.type)
+      const score = inspectionScore(fs, activeStructure.value?.type, activeStructure.value?.elements)
       return { id: insp.id, date: insp.date, score, key: conditionFromScore(score) }
     }),
   )
@@ -331,6 +335,14 @@ export const useInspectionStore = defineStore('inspection', () => {
     await db.structures.put(plain(s))
   }
 
+  /** Actualiza la configuración de sitio (amenaza sísmica) de la estructura activa. */
+  async function setSite(patch: Partial<SiteConfig>) {
+    const s = activeStructure.value
+    if (!s) return
+    s.site = { ...(s.site ?? {}), ...patch }
+    await db.structures.put(plain(s))
+  }
+
   async function addInspection(payload: { inspector: string; date: string; summary?: string }) {
     if (!selectedStructureId.value) return
     const insp: Inspection = {
@@ -378,12 +390,14 @@ export const useInspectionStore = defineStore('inspection', () => {
     structureCondition,
     structureConditionKey,
     structureVulnerability,
+    structureHazard,
     structureRisk,
     conditionByCampaign,
     severityCounts,
     currentTests,
     // acciones
     setIrregularity,
+    setSite,
     init,
     reload,
     selectStructure,

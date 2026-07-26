@@ -4,7 +4,7 @@ import { storeToRefs } from 'pinia'
 import { Printer, FlaskConical } from 'lucide-vue-next'
 import { useInspectionStore } from '../../stores/inspection'
 import { iconForDamage } from '../../ui/icons'
-import { CONDITION, SEVERITY, findingIndex, type Severity } from '../../types/inspection'
+import { CONDITION, SEVERITY, findingIndex, findingPriority, type Severity } from '../../types/inspection'
 import VulnerabilityPanel from './VulnerabilityPanel.vue'
 
 const store = useInspectionStore()
@@ -21,8 +21,11 @@ const {
 
 const condition = computed(() => CONDITION[structureConditionKey.value])
 
-// hallazgos de la campaña ordenados por severidad (peor primero)
-const prioritized = computed(() => currentFindings.value)
+// hallazgos de la campaña ordenados por prioridad de intervención (pronóstico:
+// daño × riesgo de la causa), peor primero
+const prioritized = computed(() =>
+  [...currentFindings.value].sort((a, b) => findingPriority(b) - findingPriority(a)),
+)
 
 const totalFindings = computed(() => currentFindings.value.length)
 const affectedEls = computed(() =>
@@ -212,8 +215,8 @@ function printReport() {
               />
             </div>
             <div class="text-right">
-              <div class="text-ink-400">Ext {{ f.extension }}%</div>
-              <div class="text-ink-500">Índice {{ findingIndex(f) }}</div>
+              <div class="text-ink-400">Ext {{ f.extension }}% · Índice {{ findingIndex(f) }}</div>
+              <div class="text-ink-500">Prioridad {{ findingPriority(f) }}</div>
             </div>
             <span
               class="rounded px-1.5 py-0.5 text-[11px] font-semibold"

@@ -54,6 +54,7 @@ migrate(
         { name: 'grid', type: 'json' },
         { name: 'elements', type: 'json' },
         { name: 'vulnerability', type: 'json' },
+        { name: 'site', type: 'json' },
         owner(),
         ...stamps(),
       ],
