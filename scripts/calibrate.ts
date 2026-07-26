@@ -66,6 +66,18 @@ const COND: { t: string; type: string; fs: Finding[]; els?: Element[] }[] = [
       f({ elementId: 'c', element: 'Viga', damageType: 'Grietas', severity: 3, extension: 30, zone: 'Apoyo/extremo' }),
     ],
   },
+  {
+    t: '1 grieta sev3 en 1 pilar EN CADA nivel (5 niveles)',
+    type: 'edificio',
+    els: Array.from({ length: 5 }, (_, i) => ({ id: 'c' + i, tag: 'C' + i, type: 'columna' as const, story: i + 1 })),
+    fs: Array.from({ length: 5 }, (_, i) => f({ elementId: 'c' + i, element: 'Columna / Pilar', damageType: 'Grietas', severity: 3, extension: 35, zone: 'Base' })),
+  },
+  {
+    t: '1 grieta sev3 en 1 pilar en 1 solo nivel',
+    type: 'edificio',
+    els: [{ id: 'c0', tag: 'C0', type: 'columna', story: 1 }],
+    fs: [f({ elementId: 'c0', element: 'Columna / Pilar', damageType: 'Grietas', severity: 3, extension: 35, zone: 'Base' })],
+  },
   { t: 'PUENTE: fisura sev3 cepa + humedad sev2 estribo', type: 'puente', fs: [f({ element: 'Columnas', damageType: 'Fisuras', severity: 3, extension: 30, zone: 'Fuste/tercio central' }), f({ element: 'Fundación', damageType: 'Humedades', severity: 2, extension: 50, zone: 'Cara lateral' })] },
   { t: 'PUENTE: aparato de apoyo sev4 40%', type: 'puente', fs: [f({ element: 'Aparato de apoyo', damageType: 'Rotura', severity: 4, extension: 40, zone: 'Cuerpo' })] },
 ]
