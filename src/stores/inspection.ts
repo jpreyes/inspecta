@@ -10,9 +10,9 @@ import type {
   Test,
   Vec3,
 } from '../types/inspection'
-import { conditionFromScore, hasModel, inspectionScore } from '../types/inspection'
+import { conditionFromScore, hasModel, inspectionScore, isNonStructural } from '../types/inspection'
 import { generateFrame } from '../data/generate'
-import { vulnerabilityIndex, riskLevel } from '../data/vulnerability'
+import { registeredIrregularities, riskLevel } from '../data/vulnerability'
 import { hazardIndex, type SiteConfig } from '../data/hazard'
 import { db, seedIfEmpty } from '../db'
 import { backend, type RemoteUser } from '../sync/backend'
@@ -178,17 +178,21 @@ export const useInspectionStore = defineStore('inspection', () => {
   /** Condición semáforo (operativa/observación/crítica) derivada del índice. */
   const structureConditionKey = computed(() => conditionFromScore(structureCondition.value))
 
-  /** Índice de vulnerabilidad por configuración (0 regular → 100 muy vulnerable). */
-  const structureVulnerability = computed(() =>
-    vulnerabilityIndex(activeStructure.value?.vulnerability),
+  /** Irregularidades registradas (configuración) de la estructura activa. */
+  const structureIrregularities = computed(() =>
+    registeredIrregularities(activeStructure.value?.vulnerability),
   )
 
   /** Índice de amenaza/exposición sísmica del sitio (0 sin datos → 100). */
   const structureHazard = computed(() => hazardIndex(activeStructure.value?.site))
 
-  /** Riesgo/prioridad = f(condición, vulnerabilidad, amenaza) de la campaña activa. */
-  const structureRisk = computed(() =>
-    riskLevel(structureCondition.value, structureVulnerability.value, structureHazard.value),
+  /** Riesgo = matriz(condición, amenaza) de la campaña activa. La vulnerabilidad
+   *  se registra aparte (no entra al número). */
+  const structureRisk = computed(() => riskLevel(structureCondition.value, structureHazard.value))
+
+  /** Hallazgos no estructurales de la campaña (no afectan la condición estructural). */
+  const nonStructuralCount = computed(
+    () => currentFindings.value.filter((f) => isNonStructural(f.element)).length,
   )
 
   /** Condición por campaña de inspección — comparación entre visitas periódicas. */
@@ -460,9 +464,10 @@ export const useInspectionStore = defineStore('inspection', () => {
     selectedElementFindings,
     structureCondition,
     structureConditionKey,
-    structureVulnerability,
+    structureIrregularities,
     structureHazard,
     structureRisk,
+    nonStructuralCount,
     conditionByCampaign,
     severityCounts,
     currentTests,

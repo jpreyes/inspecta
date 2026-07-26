@@ -385,15 +385,21 @@ export function findingIndex(
   return Math.round(100 * findingDamage(f))
 }
 
+// Curva severidad→daño (convexa): solo el nivel CRÍTICO (4) hunde la condición;
+// los niveles 1–3 penalizan de forma gradual, de modo que un daño moderado aislado
+// no lleve la estructura a crítica. Calibrable.
+const SEV_DAMAGE = [0, 0.1, 0.24, 0.38, 0.85] as const
+
 /** Daño de un hallazgo en 0–1 (0 sano … 1 destruido). */
 function findingDamage(f: Pick<Finding, 'severity' | 'extension' | 'damageType' | 'zone'>): number {
   if (!f.severity) return 0
-  const sev = f.severity / 4 // 0,25 … 1
+  const base = SEV_DAMAGE[f.severity] ?? 0
   const ext = Math.min(Math.max(f.extension, 0), 100) / 100
-  const extF = 0.4 + 0.6 * ext // la extensión modula; la severidad domina
+  const extMod = 0.6 + 0.4 * ext // la extensión modula (0.6 … 1.0)
   const typeF = weightOf(DAMAGE_TYPE_WEIGHT, f.damageType) // criticidad del deterioro
   const zoneF = weightOf(ZONE_WEIGHT, f.zone) // zona crítica vs cosmética
-  return Math.min(1, sev * extF * (0.5 * typeF + 0.5 * zoneF))
+  const critMod = 0.7 + 0.3 * (0.5 * typeF + 0.5 * zoneF) // modulación suave por tipo/zona
+  return Math.min(1, base * extMod * critMod)
 }
 
 /** Factor de riesgo/pronóstico por causa (NO entra en la condición actual,
@@ -417,7 +423,6 @@ export function findingPriority(
 const ZONE_MAX = 1.6 // tope al multiplicador por repetir el mismo daño en varias zonas
 const ZONE_GAIN = 0.2
 const ELEM_AMORT = 0.3 // atenuación de los daños adicionales dentro de un elemento
-const NONSTRUCT_CAP = 0.35 // los daños no estructurales no bajan la salud más que esto
 const GOV_EDIF = 0.85 // cuánto puede un elemento primario dañado gobernar el índice
 const GOV_PUENTE = 0.95 // en puente (sistema en serie) el peor-caso pesa más
 const GOV_STORY = 0.9 // peor-piso: concentración de daño en un piso (tipo piso blando) gobierna
@@ -464,6 +469,12 @@ const PRIMARY_EDIF = new Set([
   'Anclaje', 'Conexión soldada', 'Conexión apernada', 'Empalme de armadura',
 ])
 const NONSTRUCT_EDIF = new Set(['Tabique', 'Antepecho / parapeto'])
+
+/** ¿El elemento es no estructural? Sus daños NO afectan la condición estructural
+ *  (se registran/muestran aparte). */
+export function isNonStructural(element?: string): boolean {
+  return !!element && NONSTRUCT_EDIF.has(element)
+}
 const PRIMARY_PUENTE = new Set([
   'Vigas', 'Longuerina', 'Voladizo', 'Aparato de apoyo', 'Columnas', 'Fundación',
   'Muro frontal portante', 'Cabezal superior', 'Cabezal inferior', 'Losa',
@@ -471,16 +482,18 @@ const PRIMARY_PUENTE = new Set([
 ])
 
 /** Roll-up edificio (redundante): promedio ponderado por importancia + override
- *  por elemento primario dañado + firewall no estructural. Devuelve daño 0–1. */
+ *  por elemento primario dañado. Los elementos NO estructurales se excluyen (no
+ *  afectan la condición estructural). Devuelve daño 0–1. */
 function buildingDamage(elems: { name: string; dmg: number }[]): number {
+  const struct = elems.filter((e) => !NONSTRUCT_EDIF.has(e.name))
+  if (!struct.length) return 0
   let wsum = 0
   let wdmg = 0
   let primaryWorst = 0
-  for (const e of elems) {
-    const dmg = NONSTRUCT_EDIF.has(e.name) ? Math.min(e.dmg, NONSTRUCT_CAP) : e.dmg
+  for (const e of struct) {
     const w = weightOf(ELEMENT_WEIGHT, e.name)
     wsum += w
-    wdmg += w * dmg
+    wdmg += w * e.dmg
     if (PRIMARY_EDIF.has(e.name)) primaryWorst = Math.max(primaryWorst, e.dmg)
   }
   const avg = wsum ? wdmg / wsum : 0
