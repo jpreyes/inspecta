@@ -176,6 +176,17 @@ export const IconSurface = makeIcon([
   'M6 15 q2 2 4 0 t4 0 t4 0',
 ])
 
+/** Pintadas / grafiti: lata de spray con rociado. */
+export const IconGraffiti = makeIcon([
+  'M7 10 h6 v10 h-6 Z',
+  'M8 7 h4 v3 h-4 Z',
+  ['circle', { cx: 15, cy: 6, r: 0.7 }],
+  ['circle', { cx: 17, cy: 5, r: 0.7 }],
+  ['circle', { cx: 16, cy: 8, r: 0.7 }],
+  ['circle', { cx: 18, cy: 7, r: 0.7 }],
+  ['circle', { cx: 19, cy: 5, r: 0.7 }],
+])
+
 /** Descalce / socavación / cárcava: fundación socavada por el agua. */
 export const IconScour = makeIcon([
   'M8 4 h8 v8 h-8 Z',

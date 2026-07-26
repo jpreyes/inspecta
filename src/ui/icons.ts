@@ -1,5 +1,5 @@
 import type { Component } from 'vue'
-import { Droplet, Sprout, CircleHelp } from 'lucide-vue-next'
+import { Droplet, Sprout, TriangleAlert } from 'lucide-vue-next'
 import {
   IconCrack,
   IconMapCrack,
@@ -21,6 +21,7 @@ import {
   IconBolt,
   IconSurface,
   IconScour,
+  IconGraffiti,
 } from './damage-icons'
 
 /** Ícono para un deterioro, resuelto por palabras clave de su nombre (catálogo).
@@ -49,11 +50,13 @@ const RULES: [RegExp, Component][] = [
   [/soldadura|cord[óo]n/i, IconWeld],
   [/perno|anclaje|tornillo|robl[óo]n|conexi[óo]n/i, IconBolt],
   [/descalce|socavaci|c[áa]rcava|aterram/i, IconScour],
+  [/pintada|grafiti|graffiti|vandal|rayado/i, IconGraffiti],
   [/vegetaci|biol[óo]gic|musgo|liquen/i, Sprout],
   [/alteraci[óo]n superficial|meteorizaci|erosi|abrasi/i, IconSurface],
 ]
 
+// Deterioro genérico o sin regla: triángulo de alerta (mejor que un interrogante).
 export function iconForDamage(name?: string): Component {
   if (name) for (const [re, ic] of RULES) if (re.test(name)) return ic
-  return CircleHelp
+  return TriangleAlert
 }
