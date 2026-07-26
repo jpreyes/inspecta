@@ -80,11 +80,13 @@ export const IconEfflorescence = makeIcon([
   ['line', { x1: 14, y1: 13.5, x2: 18, y2: 13.5 }],
 ])
 
-/** Deformación / flecha: viga flectada entre apoyos. */
+/** Deformación / flecha: viga simplemente apoyada, flectada bajo su posición
+ *  original (línea recta punteada), con apoyos en los extremos. */
 export const IconDeflection = makeIcon([
-  'M3 8 q9 9 18 0',
-  ['line', { x1: 3, y1: 8, x2: 3, y2: 12 }],
-  ['line', { x1: 21, y1: 8, x2: 21, y2: 12 }],
+  ['line', { x1: 4, y1: 8, x2: 20, y2: 8, 'stroke-dasharray': '2 2' }],
+  'M4 8 q8 9 16 0',
+  ['polyline', { points: '2,12 6,12 4,8' }],
+  ['polyline', { points: '18,12 22,12 20,8' }],
 ])
 
 /** Pandeo local: barra arqueada bajo compresión. */
