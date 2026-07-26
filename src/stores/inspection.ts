@@ -10,6 +10,7 @@ import type {
   Vec3,
 } from '../types/inspection'
 import { conditionFromScore, hasModel, inspectionScore } from '../types/inspection'
+import { vulnerabilityIndex, riskLevel } from '../data/vulnerability'
 import { db, seedIfEmpty } from '../db'
 import { backend, type RemoteUser } from '../sync/backend'
 import { syncNow as runSync } from '../sync/engine'
@@ -174,6 +175,16 @@ export const useInspectionStore = defineStore('inspection', () => {
   /** Condición semáforo (operativa/observación/crítica) derivada del índice. */
   const structureConditionKey = computed(() => conditionFromScore(structureCondition.value))
 
+  /** Índice de vulnerabilidad por configuración (0 regular → 100 muy vulnerable). */
+  const structureVulnerability = computed(() =>
+    vulnerabilityIndex(activeStructure.value?.vulnerability),
+  )
+
+  /** Riesgo/prioridad = matriz(condición, vulnerabilidad) de la campaña activa. */
+  const structureRisk = computed(() =>
+    riskLevel(structureCondition.value, structureVulnerability.value),
+  )
+
   /** Condición por campaña de inspección — comparación entre visitas periódicas. */
   const conditionByCampaign = computed(() =>
     structureInspections.value.map((insp) => {
@@ -309,6 +320,17 @@ export const useInspectionStore = defineStore('inspection', () => {
     await db.findings.delete(id)
   }
 
+  /** Fija la clase de una irregularidad (0/1/2) en la estructura activa y persiste. */
+  async function setIrregularity(id: string, cls: number) {
+    const s = activeStructure.value
+    if (!s) return
+    const v: Record<string, number> = { ...(s.vulnerability ?? {}) }
+    if (cls > 0) v[id] = cls
+    else delete v[id]
+    s.vulnerability = v
+    await db.structures.put(plain(s))
+  }
+
   async function addInspection(payload: { inspector: string; date: string; summary?: string }) {
     if (!selectedStructureId.value) return
     const insp: Inspection = {
@@ -355,10 +377,13 @@ export const useInspectionStore = defineStore('inspection', () => {
     selectedElementFindings,
     structureCondition,
     structureConditionKey,
+    structureVulnerability,
+    structureRisk,
     conditionByCampaign,
     severityCounts,
     currentTests,
     // acciones
+    setIrregularity,
     init,
     reload,
     selectStructure,

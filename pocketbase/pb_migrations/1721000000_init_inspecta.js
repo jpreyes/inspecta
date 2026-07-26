@@ -53,6 +53,7 @@ migrate(
         { name: 'stype', type: 'text' },
         { name: 'grid', type: 'json' },
         { name: 'elements', type: 'json' },
+        { name: 'vulnerability', type: 'json' },
         owner(),
         ...stamps(),
       ],

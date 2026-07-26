@@ -30,6 +30,7 @@ export function structureToRemote(s: Structure, owner: string): Remote {
     stype: s.type,
     grid: s.grid ?? null,
     elements: s.elements, // persistimos la lista (necesario para estructuras sin modelo 3D)
+    vulnerability: s.vulnerability ?? {},
     owner,
   }
 }
@@ -98,6 +99,7 @@ export function projectFromRemote(r: any): Project {
 export function structureFromRemote(r: any): Structure {
   const grid = (r.grid || undefined) as Structure['grid']
   const stored = Array.isArray(r.elements) ? (r.elements as Structure['elements']) : []
+  const vuln = r.vulnerability && typeof r.vulnerability === 'object' ? r.vulnerability : undefined
   return {
     id: r.id,
     projectId: r.project,
@@ -106,6 +108,7 @@ export function structureFromRemote(r: any): Structure {
     grid,
     // usa la lista guardada; si no hay y sí hay grilla, la regenera
     elements: stored.length ? stored : grid ? generateFrame(grid) : [],
+    vulnerability: vuln,
   }
 }
 

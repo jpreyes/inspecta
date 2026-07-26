@@ -5,6 +5,7 @@ import { Printer, FlaskConical } from 'lucide-vue-next'
 import { useInspectionStore } from '../../stores/inspection'
 import { iconForDamage } from '../../ui/icons'
 import { CONDITION, SEVERITY, findingIndex, type Severity } from '../../types/inspection'
+import VulnerabilityPanel from './VulnerabilityPanel.vue'
 
 const store = useInspectionStore()
 const {
@@ -170,6 +171,9 @@ function printReport() {
         <p class="mt-2 text-[11px] text-ink-500">Índice de salud: 100 = sano · 0 = crítico.</p>
       </div>
     </div>
+
+    <!-- Vulnerabilidad por configuración (eje separado de la condición) -->
+    <VulnerabilityPanel />
 
     <!-- Hallazgos priorizados -->
     <div class="rounded-xl border border-ink-800 bg-ink-900">

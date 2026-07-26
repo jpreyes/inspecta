@@ -93,6 +93,9 @@ export interface Structure {
     storyH: number // altura de piso (m)
   }
   elements: Element[]
+  /** Vulnerabilidad por configuración: irregularidad(id del catálogo) → clase
+   *  0 ausente · 1 moderada · 2 severa/extrema. Ver src/data/vulnerability.ts. */
+  vulnerability?: Record<string, number>
 }
 
 /** ¿La estructura tiene modelo 3D (geometría) para el gemelo digital? */
