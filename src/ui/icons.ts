@@ -6,7 +6,7 @@ import {
   Grid3x3,
   Snowflake,
   TrendingDown,
-  Bone,
+  Rows3,
   Droplet,
   CircleHelp,
   Wrench,
@@ -18,7 +18,7 @@ import {
 const RULES: [RegExp, Component][] = [
   [/mapa|ret[íi]cula/i, Grid3x3],
   [/fisura|grieta/i, Zap],
-  [/armadura/i, Bone],
+  [/armadura/i, Rows3], // barras de acero expuestas
   [/corros|[óo]xido/i, Anvil],
   [/humed|filtr/i, Droplet],
   [/eflorescen/i, Snowflake],
