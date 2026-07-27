@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { Printer, FlaskConical } from 'lucide-vue-next'
+import { Printer, FlaskConical, FileText } from 'lucide-vue-next'
 import { useInspectionStore } from '../../stores/inspection'
 import { iconForDamage } from '../../ui/icons'
 import { CONDITION, SEVERITY, findingIndex, findingPriority, type Severity } from '../../types/inspection'
@@ -10,9 +10,14 @@ import VulnerabilityPanel from './VulnerabilityPanel.vue'
 const store = useInspectionStore()
 const {
   activeStructure,
+  activeProject,
   activeInspection,
   structureCondition,
   structureConditionKey,
+  structureHazard,
+  structureRisk,
+  structureIrregularities,
+  nonStructuralCount,
   conditionByCampaign,
   severityCounts,
   currentFindings,
@@ -60,6 +65,31 @@ function viewIn3D(elementId?: string) {
 function printReport() {
   window.print()
 }
+
+const generating = ref(false)
+async function generateDocx() {
+  if (generating.value || !activeStructure.value || !activeInspection.value) return
+  generating.value = true
+  try {
+    const { downloadReport } = await import('../../report/docx')
+    await downloadReport({
+      project: activeProject.value,
+      structure: activeStructure.value,
+      inspection: activeInspection.value,
+      findings: prioritized.value,
+      tests: currentTests.value,
+      conditionScore: structureCondition.value,
+      conditionKey: structureConditionKey.value,
+      hazardScore: structureHazard.value,
+      risk: structureRisk.value,
+      irregularities: structureIrregularities.value,
+      nonStructuralCount: nonStructuralCount.value,
+      generatedAt: new Date().toISOString(),
+    })
+  } finally {
+    generating.value = false
+  }
+}
 </script>
 
 <template>
@@ -75,12 +105,22 @@ function printReport() {
           {{ activeInspection.summary }}
         </p>
       </div>
-      <button
-        class="flex shrink-0 items-center gap-1.5 rounded-lg border border-ink-700 px-3 py-2 text-sm text-ink-300 hover:bg-ink-800"
-        @click="printReport"
-      >
-        <Printer :size="15" /> Informe
-      </button>
+      <div class="flex shrink-0 items-center gap-2">
+        <button
+          class="flex items-center gap-1.5 rounded-lg border border-ink-700 px-3 py-2 text-sm text-ink-300 hover:bg-ink-800 disabled:opacity-50"
+          :disabled="generating"
+          @click="generateDocx"
+        >
+          <FileText :size="15" /> {{ generating ? 'Generando…' : 'Informe Word' }}
+        </button>
+        <button
+          class="flex items-center gap-1.5 rounded-lg border border-ink-700 px-3 py-2 text-sm text-ink-300 hover:bg-ink-800"
+          title="Imprimir / PDF"
+          @click="printReport"
+        >
+          <Printer :size="15" />
+        </button>
+      </div>
     </header>
 
     <!-- KPIs -->

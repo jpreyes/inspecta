@@ -95,6 +95,11 @@ export const useInspectionStore = defineStore('inspection', () => {
     () => structures.value.find((s) => s.id === selectedStructureId.value) ?? null,
   )
 
+  /** Proyecto de la estructura activa. */
+  const activeProject = computed<Project | null>(
+    () => projects.value.find((p) => p.id === activeStructure.value?.projectId) ?? null,
+  )
+
   /** ¿La estructura activa tiene modelo 3D? Si no, el gemelo no aplica. */
   const activeHasModel = computed(() => hasModel(activeStructure.value))
 
@@ -453,6 +458,7 @@ export const useInspectionStore = defineStore('inspection', () => {
     syncMessage,
     // getters
     activeStructure,
+    activeProject,
     activeHasModel,
     structureInspections,
     activeInspection,

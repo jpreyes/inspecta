@@ -13,6 +13,7 @@
     "@tresjs/core": "^5.8.3",
     "@vueuse/core": "^14.3.0",
     "dexie": "^4.4.4",
+    "docx": "^9.7.1",
     "leaflet": "^1.9.4",
     "lucide-vue-next": "^1.0.0",
     "pinia": "^4.0.2",
