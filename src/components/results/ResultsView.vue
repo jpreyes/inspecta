@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { Printer, FlaskConical, FileText } from 'lucide-vue-next'
+import { Printer, FlaskConical, FileText, Plus, Trash2 } from 'lucide-vue-next'
 import { useInspectionStore } from '../../stores/inspection'
 import { iconForDamage } from '../../ui/icons'
 import { CONDITION, SEVERITY, findingIndex, findingPriority, type Severity } from '../../types/inspection'
@@ -64,6 +64,36 @@ function viewIn3D(elementId?: string) {
 }
 function printReport() {
   window.print()
+}
+
+// Ensayos: alta/baja
+const showNewTest = ref(false)
+const testDraft = reactive({
+  testType: '',
+  method: '',
+  standard: '',
+  executedAt: '',
+  laboratory: '',
+  sampleLocation: '',
+  resultSummary: '',
+})
+function openNewTest() {
+  Object.assign(testDraft, { testType: '', method: '', standard: '', laboratory: '', sampleLocation: '', resultSummary: '' })
+  testDraft.executedAt = activeInspection.value?.date ?? new Date().toISOString().slice(0, 10)
+  showNewTest.value = true
+}
+async function createTest() {
+  if (!testDraft.testType.trim() || !testDraft.resultSummary.trim()) return
+  await store.addTest({
+    testType: testDraft.testType.trim(),
+    method: testDraft.method.trim() || undefined,
+    standard: testDraft.standard.trim() || undefined,
+    executedAt: testDraft.executedAt,
+    laboratory: testDraft.laboratory.trim() || undefined,
+    sampleLocation: testDraft.sampleLocation.trim() || undefined,
+    resultSummary: testDraft.resultSummary.trim(),
+  })
+  showNewTest.value = false
 }
 
 const generating = ref(false)
@@ -278,19 +308,52 @@ async function generateDocx() {
 
     <!-- Ensayos -->
     <div class="rounded-xl border border-ink-800 bg-ink-900">
-      <div class="border-b border-ink-800 px-4 py-3">
+      <div class="flex items-center justify-between border-b border-ink-800 px-4 py-3">
         <h2 class="text-sm font-semibold text-ink-200">Ensayos</h2>
+        <button
+          v-if="activeInspection"
+          class="flex items-center gap-1 rounded-md border border-ink-700 px-2 py-1 text-xs text-ink-300 hover:bg-ink-800"
+          @click="showNewTest ? (showNewTest = false) : openNewTest()"
+        >
+          <Plus :size="13" /> Nuevo ensayo
+        </button>
       </div>
-      <div v-if="!currentTests.length" class="px-4 py-8 text-center text-sm text-ink-500">
+
+      <!-- formulario nuevo ensayo -->
+      <form v-if="showNewTest" class="grid gap-2 border-b border-ink-800 p-4 sm:grid-cols-2" @submit.prevent="createTest">
+        <input v-model="testDraft.testType" placeholder="Tipo (ej. Esclerometría)" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200" />
+        <input v-model="testDraft.executedAt" type="date" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200" />
+        <input v-model="testDraft.method" placeholder="Método" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200" />
+        <input v-model="testDraft.standard" placeholder="Norma (ej. NCh1565)" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200" />
+        <input v-model="testDraft.laboratory" placeholder="Laboratorio" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200" />
+        <input v-model="testDraft.sampleLocation" placeholder="Ubicación de la muestra" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200" />
+        <textarea v-model="testDraft.resultSummary" rows="2" placeholder="Resultado / resumen" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200 sm:col-span-2" />
+        <div class="flex gap-2 sm:col-span-2">
+          <button type="submit" class="rounded-md bg-brand-600 px-3 py-1.5 text-xs font-medium text-ink-950 hover:bg-brand-500 disabled:opacity-50" :disabled="!testDraft.testType.trim() || !testDraft.resultSummary.trim()">Guardar</button>
+          <button type="button" class="rounded-md border border-ink-700 px-2 py-1.5 text-xs text-ink-300" @click="showNewTest = false">Cancelar</button>
+        </div>
+      </form>
+
+      <div v-if="!currentTests.length && !showNewTest" class="px-4 py-8 text-center text-sm text-ink-500">
         Sin ensayos registrados en esta campaña.
       </div>
       <div v-else class="divide-y divide-ink-800">
-        <div v-for="t in currentTests" :key="t.id" class="px-4 py-3">
+        <div v-for="t in currentTests" :key="t.id" class="group px-4 py-3">
           <div class="flex items-center justify-between">
             <span class="flex items-center gap-2 text-sm font-medium text-ink-100">
               <FlaskConical :size="15" class="text-ink-400" /> {{ t.testType }}
             </span>
-            <span class="text-xs text-ink-500">{{ fmt(t.executedAt) }}</span>
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-ink-500">{{ fmt(t.executedAt) }}</span>
+              <button
+                class="text-ink-600 opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
+                title="Eliminar ensayo"
+                aria-label="Eliminar ensayo"
+                @click="store.removeTest(t.id)"
+              >
+                <Trash2 :size="14" />
+              </button>
+            </div>
           </div>
           <div class="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-ink-400">
             <span v-if="t.method">Método: {{ t.method }}</span>

@@ -451,6 +451,32 @@ export const useInspectionStore = defineStore('inspection', () => {
     return insp
   }
 
+  // ── Ensayos ────────────────────────────────────────────
+  async function addTest(payload: {
+    testType: string
+    method?: string
+    standard?: string
+    executedAt: string
+    laboratory?: string
+    sampleLocation?: string
+    resultSummary: string
+  }) {
+    if (!activeInspection.value) return
+    const t: Test = {
+      id: uid(),
+      inspectionId: activeInspection.value.id,
+      createdAt: new Date().toISOString(),
+      ...payload,
+    }
+    tests.value.push(t)
+    await db.tests.add(plain(t))
+    return t
+  }
+  async function removeTest(id: string) {
+    tests.value = tests.value.filter((t) => t.id !== id)
+    await db.tests.delete(id)
+  }
+
   return {
     // estado
     projects,
@@ -522,5 +548,7 @@ export const useInspectionStore = defineStore('inspection', () => {
     updateFinding,
     removeFinding,
     addInspection,
+    addTest,
+    removeTest,
   }
 })

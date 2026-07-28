@@ -1,11 +1,10 @@
 # Inspecta — Inspecciones estructurales con gemelo digital
 
-Prototipo web/PWA para **inspecciones estructurales periódicas en terreno**, con
-gemelo digital 3D y trabajo offline-first. El paradigma es el de `structapp-base`:
-inspecciones periódicas (visitas discretas a terreno con su fecha, hallazgos, ensayos,
-condición y reporte), **no** monitoreo en tiempo real (eso es SHM, otro producto —
-p.ej. `wind-shm`). Del 3D de wind-shm solo se toma la idea visual del gemelo digital.
-Pensado para compartir stack con el presupuestador `Scopes` (ambos Vue 3 + Vite + Tailwind).
+App web/PWA para **inspecciones estructurales periódicas en terreno**, con gemelo
+digital 3D opcional y trabajo **offline-first**. El paradigma es el de inspecciones
+periódicas (visitas discretas con su fecha, hallazgos, ensayos, condición y reporte),
+**no** monitoreo en tiempo real (eso es SHM, otro producto). Del 3D solo se toma la
+idea visual del gemelo digital.
 
 ## Stack
 
@@ -15,74 +14,99 @@ Pensado para compartir stack con el presupuestador `Scopes` (ambos Vue 3 + Vite 
 - **Pinia** — estado
 - **Dexie (IndexedDB)** — persistencia offline-first
 - **vite-plugin-pwa** — instalable, service worker, funciona sin señal
-- **PocketBase** — backend (auth + datos + fotos con thumbnails), self-host en 1 binario
-- Geolocalización: solo **GPS del hallazgo/daño** (sin mapa Leaflet)
-
-## Backend PocketBase (portable)
-
-La web es **estática e independiente** del backend. El código habla siempre al
-mismo origen `/api`, así que mover la web al VPS no requiere cambios:
-
-- **Producción**: la app compilada (`dist/`) se sirve desde `pb_public/` del propio
-  PocketBase → `/api` ya es PocketBase, mismo dominio, cero configuración.
-- **Desarrollo**: Vite proxea `/api` a tu PocketBase local (`VITE_PB_URL`, por
-  defecto `http://127.0.0.1:8097`). El código de la app es idéntico local y en el VPS.
-- **Sin PocketBase**: la app funciona 100% offline (IndexedDB/Dexie). El backend es
-  la capa de sync/compartir, no un requisito para operar.
-
-Capa de backend en `src/sync/` (`pocketbase.ts` = cliente, `backend.ts` = adaptador
-intercambiable). Ver `DEPLOY.md`.
+- **docx** — informe Word generado en el cliente
+- **PocketBase** — backend opcional (auth + datos + fotos), self-host en 1 binario
 
 ## Cómo correr
 
 ```bash
 npm install
 npm run dev      # servidor de desarrollo
-npm run build    # build de producción + PWA
+npm run build    # build de producción + PWA (vue-tsc -b, estricto)
 ```
 
-## Qué hay hoy (v0)
+Herramienta de calibración del scoring: `npx tsx scripts/calibrate.ts`.
 
-- **Gemelo digital 3D** paramétrico (pórtico de HA generado desde grilla: vanos,
-  pisos, alturas). Cada elemento (columna/viga) se colorea por su **severidad
-  vigente** en la inspección seleccionada. Click para seleccionar; pins 3D por hallazgo.
-- **Jerarquía** Proyecto ▸ Estructura ▸ Elemento en el sidebar, con punto de salud.
-- **Selector de inspecciones periódicas**: campañas discretas (visitas) seleccionables.
-  Al elegir una, el gemelo muestra el estado *a esa visita* (último hallazgo por elemento
-  en o antes de esa fecha) → permite comparar la **evolución del daño entre inspecciones**.
-- **Ficha de inspección**: registrar hallazgo (tipo de daño, severidad 0–4,
-  extensión %, observaciones, **fotos** vía cámara → base64), listado y borrado.
-- **Scoring determinístico**: índice de condición por hallazgo y global por estructura.
-- **Persistencia offline** en IndexedDB con datos semilla (edificio demo UACh, 2 campañas).
+## Funcionalidad
 
-## Roadmap sugerido
+### Catálogo por tipo de estructura
+`src/data/catalog.ts` (generado por `scripts/build_catalog_ts.py`) define, para
+**edificio** y **puente**: componentes → elementos (con materiales y zonas), deterioros
+(con material y criterios de gravedad en 4 bandas) y causas por deterioro. El puente
+se deriva del maestro `Gravedades_Base.xlsx` enriquecido con materialidad y anclajes.
+Cada campo admite "Otro" (texto libre).
 
-- [x] Colocar el **pin exactamente donde se hace click** en la superficie 3D (raycast).
-- [x] **Vista de Resultados** "de una sola mirada" (condición semáforo, KPIs, distribución por
-      severidad, evolución por campaña, hallazgos priorizados, ensayos). Toggle Gemelo 3D ↔ Resultados.
-- [x] **Ensayos** como entidad (esclerometría, carbonatación… tipo/método/norma/lab/muestra/resultado).
-- [ ] **CRUD en Supabase** de proyectos/estructuras/campañas/hallazgos/ensayos (hoy solo IndexedDB local).
-- [ ] **GPS** del dispositivo al crear hallazgo (geolocalización del daño, sin mapa).
-- [ ] **Informe PDF** real (hoy usa print del navegador) con score, condición y fotos.
-- [ ] Restringir el pin al **elemento seleccionado** (hoy se puede clavar en cualquier malla).
-- [ ] Editor paramétrico de la estructura (cambiar grilla en vivo).
-- [ ] **Reportes de campo** (PDF/Excel) reusando lo de `Scopes`.
-- [ ] Rating **IA** de fotos (severidad sugerida) — capa opcional.
-- [ ] Sincronización con backend (Supabase) cuando hay señal.
-- [ ] Comparador lado a lado de dos campañas (diff de daño).
+### Registro de daños ("daño primero")
+Un botón **Nuevo daño** abre un formulario en cascada: Componente → Elemento → Material
+→ Zona → Tipo de daño → Causa, con severidad (0–4), extensión (%), observaciones y
+**fotos** (cámara → base64). Si se abre desde el gemelo, el hallazgo queda atado al
+elemento 3D (colorea la malla).
+
+### Condición (índice de salud 0–100, 100 = sano)
+`src/types/inspection.ts`. Modelo jerárquico hallazgo → elemento → estructura, con dos
+agregadores:
+- **Edificio** (redundante): promedio ponderado por importancia + override por elemento
+  primario + **agregación por piso** (concentración tipo piso blando gobierna). Los
+  elementos **no estructurales** (tabiques) no afectan la condición estructural.
+- **Puente** (serie): peor-caso más fuerte.
+
+La causa no entra en la condición: alimenta la **prioridad de intervención**
+(`findingPriority` = daño × riesgo de la causa). Inspirado en España (G·K1·K2),
+AASHTO/BCI, PCI deduct y ATC-20/EMS-98.
+
+### Vulnerabilidad por configuración (registro)
+`src/data/vulnerability.ts`. Catálogo de irregularidades **NCh433 / ASCE 7** (planta
+12.3-1, elevación 12.3-2, más mecanismos locales: columna corta, golpeteo, viga
+fuerte-columna débil, pórtico-tabique). Se **registran** cuáles hay y su nivel; no se
+agregan en un índice (su peligrosidad depende del sismo y de un análisis).
+
+### Amenaza sísmica y riesgo
+`src/data/hazard.ts`. Índice de amenaza/exposición desde el sitio (zona sísmica, tipo
+de suelo DS61, categoría de ocupación NCh433). **Riesgo = matriz(condición × amenaza)**.
+
+### Gemelo digital 3D (opcional)
+Pórtico paramétrico (TresJS) generado desde grilla; cada elemento se colorea por su
+severidad vigente en la campaña seleccionada. Estructuras sin modelo 3D se trabajan por
+lista/jerarquía.
+
+### Campañas periódicas
+Selector de inspecciones (visitas discretas). Al elegir una, el gemelo/lista muestran el
+estado *a esa fecha* → permite comparar la **evolución entre inspecciones**.
+
+### CRUD y datos
+- Proyectos y estructuras (crear/editar/eliminar en el sidebar, borrado en cascada).
+- Inspecciones y ensayos (esclerometría, carbonatación…).
+- Vista de **Resultados** "de una sola mirada": KPIs, distribución por severidad,
+  evolución por campaña, riesgo/vulnerabilidad/sitio, hallazgos priorizados y ensayos.
+- **Informe Word (.docx)** generado en el cliente (`src/report/docx.ts`).
+
+### Offline-first + sync opcional (PocketBase)
+Todo vive en IndexedDB; la app funciona 100% sin señal. El backend PocketBase es una
+capa opcional de sync/compartir. La web habla siempre al mismo origen `/api`, así que
+servir `dist/` desde `pb_public/` no requiere cambios de código. Ver `DEPLOY.md`.
 
 ## Estructura
 
 ```
 src/
-  types/inspection.ts     # modelo de dominio + scoring + taxonomía de daño
-  data/generate.ts        # generador paramétrico del pórtico 3D
-  data/seed.ts            # datos demo
-  db/index.ts             # Dexie / IndexedDB (offline)
-  stores/inspection.ts    # store Pinia (estado por inspección periódica seleccionada)
+  types/inspection.ts       # dominio + scoring (condición, prioridad)
+  data/catalog.ts           # catálogo edificio/puente (generado)
+  data/vulnerability.ts     # irregularidades NCh433/ASCE 7 + riesgo
+  data/hazard.ts            # amenaza sísmica NCh433
+  data/generate.ts          # generador paramétrico del pórtico 3D
+  data/seed.ts              # datos demo
+  db/index.ts               # Dexie / IndexedDB (offline)
+  stores/inspection.ts      # store Pinia
+  report/docx.ts            # informe Word
+  sync/                     # capa PocketBase (opcional)
+  ui/icons.ts, damage-icons.ts   # íconos de daño (SVG propios)
   components/
-    layout/TopBar.vue      layout/Sidebar.vue
-    twin/TwinCanvas.vue    # gemelo digital 3D (TresJS)
-    inspection/InspectionSelector.vue  # selector de campañas periódicas
-    inspection/InspectionPanel.vue  # ficha + formulario de hallazgo
+    layout/{TopBar,Sidebar}.vue
+    twin/TwinCanvas.vue
+    list/DamageListView.vue
+    results/{ResultsView,VulnerabilityPanel}.vue
+    inspection/{InspectionSelector,InspectionPanel,DamageForm}.vue
+scripts/
+  build_catalog_ts.py       # genera data/catalog.ts
+  calibrate.ts              # banco de calibración del scoring
 ```
