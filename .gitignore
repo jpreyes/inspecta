@@ -13,8 +13,9 @@ dist-ssr
 *.local
 .env
 
-# artefactos de verificación headless
+# artefactos de verificación headless (capturas de QA)
 scripts/*.png
+.*.png
 
 # datos locales de PocketBase (nunca versionar)
 pocketbase/pb_data/
