@@ -45,12 +45,12 @@ export default defineConfig(({ mode }) => {
       manifest: {
         name: 'Inspecta — Inspecciones Estructurales',
         short_name: 'Inspecta',
-        description: 'Inspecciones estructurales con gemelo digital 3D y línea de tiempo',
+        description: 'Inspecciones estructurales periódicas con gemelo digital 3D',
         theme_color: '#0f172a',
         background_color: '#0f172a',
         display: 'standalone',
         icons: [
-          { src: 'favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+          { src: 'favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
         ],
       },
       workbox: {

@@ -49,6 +49,9 @@ export const useInspectionStore = defineStore('inspection', () => {
   /** Vista central: lista de daños (por defecto), gemelo 3D o resultados. */
   const activeView = ref<'list' | 'twin' | 'results'>('list')
 
+  /** Sidebar como drawer en pantallas chicas (móvil/tablet). */
+  const sidebarOpen = ref(false)
+
   const selectedStructureId = ref<string | null>(null)
   const selectedElementId = ref<string | null>(null)
   /** Índice de la campaña de inspección seleccionada (visita periódica activa). */
@@ -236,6 +239,13 @@ export const useInspectionStore = defineStore('inspection', () => {
 
   function setView(v: 'list' | 'twin' | 'results') {
     activeView.value = v
+    sidebarOpen.value = false
+  }
+  function toggleSidebar() {
+    sidebarOpen.value = !sidebarOpen.value
+  }
+  function closeSidebar() {
+    sidebarOpen.value = false
   }
 
   function openDamageForm(elementId?: string) {
@@ -423,7 +433,12 @@ export const useInspectionStore = defineStore('inspection', () => {
     }
   }
 
-  async function addInspection(payload: { inspector: string; date: string; summary?: string }) {
+  async function addInspection(payload: {
+    inspector: string
+    date: string
+    summary?: string
+    weather?: string
+  }) {
     if (!selectedStructureId.value) return
     const insp: Inspection = {
       id: uid(),
@@ -452,6 +467,7 @@ export const useInspectionStore = defineStore('inspection', () => {
     pendingPin,
     damageFormOpen,
     damageFormElementId,
+    sidebarOpen,
     authUser,
     syncing,
     lastSyncAt,
@@ -491,6 +507,8 @@ export const useInspectionStore = defineStore('inspection', () => {
     selectStructure,
     selectElement,
     setView,
+    toggleSidebar,
+    closeSidebar,
     openDamageForm,
     closeDamageForm,
     login,

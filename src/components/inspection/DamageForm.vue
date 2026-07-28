@@ -14,7 +14,13 @@ import {
 } from '../../types/inspection'
 
 const store = useInspectionStore()
-const { activeStructure, activeInspection } = storeToRefs(store)
+const { activeStructure, activeInspection, damageFormElementId } = storeToRefs(store)
+
+// Elemento del modelo 3D vinculado (si el formulario se abrió desde el gemelo):
+// el hallazgo se ata a ese elemento para colorear la malla y habilitar "Ver en 3D".
+const linkedElement = computed(() =>
+  activeStructure.value?.elements.find((e) => e.id === damageFormElementId.value) ?? null,
+)
 
 const cat = computed(() => catalogFor(activeStructure.value?.type))
 const severities = [1, 2, 3, 4, 0] as Severity[]
@@ -106,6 +112,7 @@ async function submit() {
     element: elementValue.value,
     material: materialValue.value || undefined,
     zone: zoneValue.value || undefined,
+    elementId: damageFormElementId.value ?? undefined,
     damageType: damageValue.value,
     cause: causeValue.value || undefined,
     severity: form.severity,
@@ -127,9 +134,12 @@ const textCls = 'mt-1.5 w-full rounded-md border border-ink-700 bg-ink-800 px-2 
       <div class="flex items-center justify-between border-b border-ink-800 px-4 py-3">
         <div>
           <h2 class="text-sm font-semibold text-ink-100">Nuevo daño</h2>
-          <p class="text-[11px] text-ink-500">{{ activeStructure?.name }} · campaña {{ activeInspection?.date }}</p>
+          <p class="text-[11px] text-ink-500">
+            {{ activeStructure?.name }} · campaña {{ activeInspection?.date }}
+            <span v-if="linkedElement" class="text-brand-500">· elemento {{ linkedElement.tag }}</span>
+          </p>
         </div>
-        <button class="text-ink-500 hover:text-ink-200" @click="store.closeDamageForm()"><X :size="18" /></button>
+        <button class="text-ink-500 hover:text-ink-200" aria-label="Cerrar" @click="store.closeDamageForm()"><X :size="18" /></button>
       </div>
 
       <form class="space-y-3 p-4" @submit.prevent="submit">

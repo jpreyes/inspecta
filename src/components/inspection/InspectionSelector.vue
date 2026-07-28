@@ -15,16 +15,22 @@ const hasInspections = computed(() => structureInspections.value.length > 0)
 
 // Crear nueva campaña de inspección periódica
 const showNew = ref(false)
-const draft = reactive({ date: '', inspector: '', summary: '' })
+const draft = reactive({ date: '', inspector: '', weather: '', summary: '' })
 function openNew() {
   draft.date = new Date().toISOString().slice(0, 10)
   draft.inspector = activeInspection.value?.inspector ?? ''
+  draft.weather = ''
   draft.summary = ''
   showNew.value = true
 }
 async function createInspection() {
   if (!draft.date || !draft.inspector.trim()) return
-  await store.addInspection({ date: draft.date, inspector: draft.inspector.trim(), summary: draft.summary.trim() })
+  await store.addInspection({
+    date: draft.date,
+    inspector: draft.inspector.trim(),
+    weather: draft.weather.trim() || undefined,
+    summary: draft.summary.trim() || undefined,
+  })
   showNew.value = false
 }
 
@@ -88,6 +94,24 @@ function step(dir: number) {
           v-model="draft.inspector"
           type="text"
           placeholder="Nombre"
+          class="mt-0.5 block w-full rounded-md border border-ink-700 bg-ink-800 px-2 py-1 text-xs text-ink-200"
+        />
+      </label>
+      <label class="text-[11px] text-ink-400">
+        Clima
+        <input
+          v-model="draft.weather"
+          type="text"
+          placeholder="Nublado, 12°C"
+          class="mt-0.5 block w-32 rounded-md border border-ink-700 bg-ink-800 px-2 py-1 text-xs text-ink-200"
+        />
+      </label>
+      <label class="w-full text-[11px] text-ink-400">
+        Resumen
+        <textarea
+          v-model="draft.summary"
+          rows="2"
+          placeholder="Objetivo y hallazgos generales de la visita…"
           class="mt-0.5 block w-full rounded-md border border-ink-700 bg-ink-800 px-2 py-1 text-xs text-ink-200"
         />
       </label>

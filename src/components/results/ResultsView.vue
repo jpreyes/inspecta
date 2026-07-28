@@ -208,7 +208,7 @@ async function generateDocx() {
                 minHeight: '4px',
               }"
             />
-            <span class="text-[10px] text-ink-500">{{ fmt(c.date).replace(/ de \d+/, '') }}</span>
+            <span class="text-[10px] text-ink-500">{{ fmt(c.date) }}</span>
           </div>
         </div>
         <p class="mt-2 text-[11px] text-ink-500">Índice de salud: 100 = sano · 0 = crítico.</p>

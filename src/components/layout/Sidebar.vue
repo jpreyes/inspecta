@@ -246,6 +246,15 @@ const structureDamaged = computed(() => Object.keys(severityByElement.value).len
     </form>
 
     <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+      <div v-if="!projects.length && ed.mode !== 'new-project'" class="px-2 py-8 text-center">
+        <p class="text-xs text-ink-500">Aún no hay proyectos.</p>
+        <button
+          class="mx-auto mt-3 flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-ink-950 hover:bg-brand-500"
+          @click="openNewProject"
+        >
+          <FolderPlus :size="14" /> Crear primer proyecto
+        </button>
+      </div>
       <div v-for="prj in projects" :key="prj.id" class="mb-1">
         <!-- Proyecto -->
         <div class="group flex items-center gap-0.5 rounded pr-1 hover:bg-ink-800">
@@ -329,7 +338,7 @@ const structureDamaged = computed(() => Object.keys(severityByElement.value).len
                     :key="el.id"
                     class="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-xs hover:bg-ink-800"
                     :class="el.id === selectedElementId ? 'bg-ink-800 text-ink-100' : 'text-ink-400'"
-                    @click="store.selectElement(el.id)"
+                    @click="store.selectElement(el.id); store.closeSidebar()"
                   >
                     <span class="inline-block h-2 w-2 shrink-0 rounded-full" :style="{ background: dotColor(el.id) }" />
                     <span class="flex-1 truncate">{{ el.tag }}</span>

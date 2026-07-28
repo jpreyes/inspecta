@@ -558,12 +558,3 @@ export function inspectionScore(
   const damage = Math.min(1, Math.max(avg, worst * GOV_STORY))
   return Math.round(100 * (1 - damage))
 }
-
-/** Peor severidad activa de un conjunto de hallazgos. */
-export function worstSeverity(findings: Finding[]): Severity {
-  return findings.reduce<Severity>((m, f) => (f.severity > m ? f.severity : m), 0)
-}
-
-export function severityColor(sev: Severity): string {
-  return SEVERITY[sev].color
-}
