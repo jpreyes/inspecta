@@ -31,3 +31,4 @@ pocketbase/pb_data/
 *.sln
 *.sw?
 *.xlsx
+deploy/credentials.env

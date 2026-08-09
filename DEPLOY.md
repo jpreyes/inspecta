@@ -35,6 +35,38 @@ Sin PocketBase corriendo, la app igual funciona 100% offline (Dexie).
 
 Correr como servicio (systemd) y backups: ver README / doc de PocketBase.
 
+## Producción con Docker — `https://inspecta.jpreyes.cl`
+
+Es lo mismo, empaquetado: `deploy/Dockerfile` compila la web con node y la copia a
+`pb_public/` dentro de una imagen que solo lleva el binario de PocketBase.
+
+```bash
+docker compose -f deploy/docker-compose.yml up -d --build
+```
+
+En el VPS srv1134838 **no** se usa el HTTPS automático de PocketBase: ahí cloudflared
+corre como servicio systemd con un solo túnel para todos los sitios del box, y es
+Cloudflare quien pone el certificado. Así que PocketBase escucha HTTP plano y solo
+publicamos el puerto local que el túnel enruta:
+
+```
+cloudflared (systemd) → 127.0.0.1:8094 → pocketbase:8090
+```
+
+En el dashboard de Zero Trust, el túnel lleva un public hostname `inspecta.jpreyes.cl`
+→ HTTP → `localhost:8094`.
+
+Notas de operación:
+
+- Los datos viven en el volumen docker `inspecta_pb_data`. Respaldo:
+  `docker compose -f deploy/docker-compose.yml exec pocketbase tar czf - -C /pb pb_data > backup.tar.gz`
+- `pb_migrations/` se monta desde el repo, así que los cambios de esquema hechos en
+  `/_/` quedan versionados.
+- La web va **dentro de la imagen**: para publicar cambios del frontend hay que
+  reconstruir (`up -d --build`), no basta con reiniciar.
+- Las cuentas (superusuario del panel y usuario de la app) quedan en
+  `deploy/credentials.env`, gitignored.
+
 ## Por qué "es fácil del otro lado"
 
 El cliente PocketBase apunta a `'/'` (mismo origen). En dev eso se resuelve vía el

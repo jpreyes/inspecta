@@ -1,0 +1,36 @@
+# Inspecta — https://inspecta.jpreyes.cl
+#
+# Un solo servicio: PocketBase sirve la API en /api, el panel en /_/ y la SPA
+# (compilada dentro de la imagen, en pb_public/) en el resto. Sin proxy delante:
+# el mismo origen, tal como describe DEPLOY.md.
+#
+# En el VPS srv1134838 cloudflared corre como servicio systemd con un solo
+# túnel para todos los sitios; acá solo publicamos el puerto local que enruta.
+#
+#   cloudflared (systemd) → 127.0.0.1:8094 → pocketbase:8090
+#
+#   docker compose -f deploy/docker-compose.yml up -d --build
+name: inspecta
+
+services:
+  pocketbase:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: inspecta/pocketbase:latest
+    container_name: inspecta-pb
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    environment:
+      TZ: America/Santiago
+    volumes:
+      - pb_data:/pb/pb_data
+      # Migraciones desde el repo: los cambios de esquema quedan versionados.
+      - ../pocketbase/pb_migrations:/pb/pb_migrations
+    ports:
+      - "127.0.0.1:8094:8090"
+
+volumes:
+  pb_data:
