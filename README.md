@@ -91,8 +91,8 @@ miembros con un rol cada uno:
 
 | Rol | Gestiona el equipo | Proyectos y estructuras | Campañas, hallazgos, ensayos | Ver e informar |
 |---|---|---|---|---|
-| Administrador | ✅ | ✅ | ✅ | ✅ |
-| Inspector | — | — | ✅ | ✅ |
+| Administrador | ✅ | ✅ | ✅ (todas) | ✅ |
+| Inspector | — | — | ✅ (solo asignadas) | ✅ |
 | Revisor | — | — | — | ✅ |
 | Cliente | — | — | — | ✅ |
 
@@ -102,6 +102,17 @@ en PocketBase las condiciones sobre una relación multi-valor se evalúan de for
 independiente entre filas, así que "la misma membresía tiene este usuario Y este rol"
 no es expresable de forma confiable en una regla. Con listas por rol, cada regla mira
 un solo campo y la autorización real la impone el servidor, no la interfaz.
+
+**Asignación por estructura.** El rol define *qué* puede hacer alguien; la asignación
+define *dónde*. Cada estructura tiene su lista de inspectores (`structures.inspectors`),
+y es muchos-a-muchos: Juan puede atender el Puente X y el Y, y Carlos el Z y también
+el Y. Un inspector solo registra campañas, hallazgos y ensayos en las estructuras que
+tiene asignadas.
+
+Una estructura **sin asignados queda abierta** a todos los inspectores del equipo —
+así el modelo es retrocompatible y no hay que asignar nada para empezar a trabajar.
+Asignar es competencia del administrador (`structures` solo lo actualiza él). Los
+revisores y clientes no se asignan: su acceso es de lectura sobre todo el equipo.
 
 **Sin equipo la app está en modo local**: sin sesión los datos son de ese dispositivo,
 no hay a quién restringir y el acceso es completo — es lo que mantiene intacto el

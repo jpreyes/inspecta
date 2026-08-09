@@ -7,7 +7,7 @@ import { iconForDamage } from '../../ui/icons'
 import { SEVERITY, findingIndex } from '../../types/inspection'
 
 const store = useInspectionStore()
-const { selectedElement, selectedElementFindings, currentFindings, activeInspection, canEditData } =
+const { selectedElement, selectedElementFindings, currentFindings, activeInspection, canWorkHere } =
   storeToRefs(store)
 
 const list = computed(() =>
@@ -81,7 +81,7 @@ function register() {
           <span v-if="f.authorName" class="text-[10px] text-ink-600">Registró {{ f.authorName }}</span>
           <span v-else />
           <button
-            v-if="canEditData"
+            v-if="canWorkHere"
             class="flex items-center gap-1 text-[11px] text-ink-500 hover:text-red-400"
             @click="store.removeFinding(f.id)"
           >
@@ -92,7 +92,7 @@ function register() {
     </div>
 
     <!-- registrar daño (abre el formulario; el elemento va preseleccionado si hay uno) -->
-    <div v-if="canEditData" class="border-t border-ink-800 p-3">
+    <div v-if="canWorkHere" class="border-t border-ink-800 p-3">
       <button
         class="flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-600 py-2 text-sm font-medium text-ink-950 hover:bg-brand-500"
         @click="register"

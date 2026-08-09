@@ -13,7 +13,7 @@ const {
   inspectionIndex,
   activeInspection,
   conditionByCampaign,
-  canEditData,
+  canWorkHere,
   teamMembers,
   authUser,
 } = storeToRefs(store)
@@ -101,7 +101,7 @@ function step(dir: number) {
           <span class="text-ink-500"> · {{ activeInspection.inspector }}</span>
         </div>
         <button
-          v-if="canEditData"
+          v-if="canWorkHere"
           class="flex items-center gap-1 rounded-md border border-ink-700 px-2 py-1 text-xs text-ink-300 hover:bg-ink-800"
           @click="openNew"
         >

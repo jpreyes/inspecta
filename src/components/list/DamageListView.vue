@@ -8,7 +8,7 @@ import { CONDITION, SEVERITY, findingIndex } from '../../types/inspection'
 import InspectionSelector from '../inspection/InspectionSelector.vue'
 
 const store = useInspectionStore()
-const { activeStructure, activeInspection, activeHasModel, currentFindings, structureCondition, structureConditionKey, canEditData } =
+const { activeStructure, activeInspection, activeHasModel, currentFindings, structureCondition, structureConditionKey, canWorkHere } =
   storeToRefs(store)
 
 const condition = computed(() => CONDITION[structureConditionKey.value])
@@ -50,7 +50,7 @@ function fmtStamp(iso?: string) {
           <span class="text-xs text-ink-500">{{ structureCondition }}/100</span>
         </div>
         <button
-          v-if="canEditData"
+          v-if="canWorkHere"
           class="flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-ink-950 hover:bg-brand-500"
           @click="store.openDamageForm()"
         >
@@ -121,7 +121,7 @@ function fmtStamp(iso?: string) {
             </td>
             <td class="px-3 py-2 text-right">
               <button
-                v-if="canEditData"
+                v-if="canWorkHere"
                 class="text-ink-600 hover:text-red-400"
                 title="Eliminar"
                 @click="store.removeFinding(f.id)"
@@ -138,7 +138,7 @@ function fmtStamp(iso?: string) {
     <div v-else class="rounded-xl border border-dashed border-ink-800 px-4 py-12 text-center">
       <p class="text-sm text-ink-400">Sin daños registrados en esta campaña.</p>
       <button
-        v-if="canEditData"
+        v-if="canWorkHere"
         class="mx-auto mt-3 flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-ink-950 hover:bg-brand-500"
         @click="store.openDamageForm()"
       >

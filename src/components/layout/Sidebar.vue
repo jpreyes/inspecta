@@ -16,7 +16,7 @@ import { useInspectionStore } from '../../stores/inspection'
 import { SEVERITY, type Severity, type StructureType } from '../../types/inspection'
 
 const store = useInspectionStore()
-const { projects, structures, activeStructure, severityByElement, selectedElementId, canManageProjects } =
+const { projects, structures, activeStructure, severityByElement, selectedElementId, canManageProjects, teamMembers } =
   storeToRefs(store)
 
 // Estado de despliegue (colapsable)
@@ -70,7 +70,20 @@ const ed = reactive({
   baysX: 3,
   baysZ: 2,
   stories: 3,
+  /** Inspectores asignados a la estructura. Vacío = abierta a todo el equipo. */
+  inspectorIds: [] as string[],
 })
+
+/** Miembros que pueden trabajar en terreno (los asignables a una estructura). */
+const assignable = computed(() =>
+  teamMembers.value.filter((m) => m.role === 'inspector' || m.role === 'admin'),
+)
+
+function toggleInspector(userId: string) {
+  const i = ed.inspectorIds.indexOf(userId)
+  if (i >= 0) ed.inspectorIds.splice(i, 1)
+  else ed.inspectorIds.push(userId)
+}
 const editorTitle = computed(
   () =>
     ({
@@ -97,11 +110,19 @@ function openNewStructure(projectId: string) {
     baysX: 3,
     baysZ: 2,
     stories: 3,
+    inspectorIds: [],
   })
   expandedProjects.add(projectId)
 }
 function openEditStructure(id: string, name: string, type: StructureType) {
-  Object.assign(ed, { mode: 'edit-structure', structureId: id, name, type })
+  const s = structures.value.find((x) => x.id === id)
+  Object.assign(ed, {
+    mode: 'edit-structure',
+    structureId: id,
+    name,
+    type,
+    inspectorIds: [...(s?.inspectorIds ?? [])],
+  })
 }
 function cancelEditor() {
   ed.mode = null
@@ -117,9 +138,12 @@ async function submitEditor() {
       ed.type === 'edificio' && ed.useGrid
         ? { baysX: ed.baysX, baysZ: ed.baysZ, stories: ed.stories, bayX: 6, bayZ: 5, storyH: 3.2 }
         : undefined
-    await store.addStructure({ projectId: ed.projectId, name, type: ed.type, grid })
-  } else if (ed.mode === 'edit-structure')
+    const s = await store.addStructure({ projectId: ed.projectId, name, type: ed.type, grid })
+    if (s && ed.inspectorIds.length) await store.assignInspectors(s.id, ed.inspectorIds)
+  } else if (ed.mode === 'edit-structure') {
     await store.updateStructure(ed.structureId, { name, type: ed.type })
+    await store.assignInspectors(ed.structureId, ed.inspectorIds)
+  }
   ed.mode = null
 }
 async function delProject(id: string, name: string) {
@@ -234,6 +258,33 @@ const structureDamaged = computed(() => Object.keys(severityByElement.value).len
             Pisos
             <input v-model.number="ed.stories" type="number" min="1" class="mt-0.5 block w-full rounded border border-ink-700 bg-ink-800 px-1.5 py-1 text-xs text-ink-200" />
           </label>
+        </div>
+
+        <!-- Asignación de inspectores (solo con equipo activo) -->
+        <div v-if="assignable.length" class="rounded-md border border-ink-800 bg-ink-900/60 p-2">
+          <div class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+            Inspectores asignados
+          </div>
+          <label
+            v-for="m in assignable"
+            :key="m.userId"
+            class="flex items-center gap-1.5 py-0.5 text-[11px] text-ink-300"
+          >
+            <input
+              type="checkbox"
+              class="accent-brand-600"
+              :checked="ed.inspectorIds.includes(m.userId)"
+              @change="toggleInspector(m.userId)"
+            />
+            <span class="truncate">{{ m.email || m.name || m.userId }}</span>
+          </label>
+          <p class="mt-1 text-[10px] leading-snug text-ink-600">
+            {{
+              ed.inspectorIds.length
+                ? 'Solo estos inspectores podrán registrar campañas y hallazgos aquí.'
+                : 'Sin asignados: abierta a todos los inspectores del equipo.'
+            }}
+          </p>
         </div>
       </template>
       <div class="flex gap-2">

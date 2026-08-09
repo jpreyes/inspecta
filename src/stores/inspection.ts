@@ -119,7 +119,32 @@ export const useInspectionStore = defineStore('inspection', () => {
   }
   const canManageTeam = computed(() => can('manage_team'))
   const canManageProjects = computed(() => can('manage_projects'))
-  const canEditData = computed(() => can('edit_data'))
+
+  /**
+   * ¿Puede trabajar (campañas, hallazgos, ensayos) en ESTA estructura?
+   *
+   * El rol manda primero: revisor y cliente nunca. Después manda la asignación:
+   * un inspector solo trabaja en las estructuras que tiene asignadas. Una
+   * estructura sin asignados queda abierta a todos los inspectores del equipo
+   * (es el comportamiento previo a la asignación, y el que aplica en modo local).
+   * El admin del equipo siempre puede. Las reglas de PocketBase imponen lo mismo
+   * del lado del servidor: esto solo evita ofrecer botones que van a fallar.
+   */
+  function canWorkOnStructure(structureId?: string | null): boolean {
+    if (!can('edit_data')) return false
+    if (myRole.value === null || myRole.value === 'admin') return true
+    const s = structures.value.find((x) => x.id === structureId)
+    const assigned = s?.inspectorIds ?? []
+    return assigned.length === 0 || assigned.includes(authUser.value?.id ?? '')
+  }
+
+  /** Lo mismo, para la estructura activa (lo que consume la interfaz). */
+  const canWorkHere = computed(() => canWorkOnStructure(selectedStructureId.value))
+
+  /** Estructura a la que pertenece una campaña (para validar hallazgos/ensayos). */
+  function structureOfInspection(inspectionId?: string): string | undefined {
+    return inspections.value.find((i) => i.id === inspectionId)?.structureId
+  }
 
   /** Sello de equipo + autor para los registros nuevos. */
   function stamp() {
@@ -490,7 +515,9 @@ export const useInspectionStore = defineStore('inspection', () => {
     notes?: string
   }) {
     if (!activeInspection.value) return
-    if (!can('edit_data')) throw new Error('Tu rol no permite registrar hallazgos.')
+    if (!canWorkOnStructure(structureOfInspection(activeInspection.value.id))) {
+      throw new Error('No estás asignado a esta estructura.')
+    }
     const f: Finding = {
       id: uid(),
       inspectionId: activeInspection.value.id,
@@ -505,15 +532,20 @@ export const useInspectionStore = defineStore('inspection', () => {
   }
 
   async function updateFinding(id: string, patch: Partial<Finding>) {
-    if (!can('edit_data')) throw new Error('Tu rol no permite editar hallazgos.')
     const f = findings.value.find((x) => x.id === id)
     if (!f) return
+    if (!canWorkOnStructure(structureOfInspection(f.inspectionId))) {
+      throw new Error('No estás asignado a esta estructura.')
+    }
     Object.assign(f, patch)
     await db.findings.put(plain(f))
   }
 
   async function removeFinding(id: string) {
-    if (!can('edit_data')) throw new Error('Tu rol no permite eliminar hallazgos.')
+    const f = findings.value.find((x) => x.id === id)
+    if (f && !canWorkOnStructure(structureOfInspection(f.inspectionId))) {
+      throw new Error('No estás asignado a esta estructura.')
+    }
     findings.value = findings.value.filter((f) => f.id !== id)
     await db.findings.delete(id)
   }
@@ -592,6 +624,16 @@ export const useInspectionStore = defineStore('inspection', () => {
     Object.assign(s, patch)
     await db.structures.put(plain(s))
   }
+  /** Asigna los inspectores de una estructura (solo admin). Lista vacía = la
+   *  estructura queda abierta a todos los inspectores del equipo. */
+  async function assignInspectors(structureId: string, userIds: string[]) {
+    if (!can('manage_projects')) throw new Error('Solo un administrador asigna inspectores.')
+    const s = structures.value.find((x) => x.id === structureId)
+    if (!s) return
+    s.inspectorIds = [...userIds]
+    await db.structures.put(plain(s))
+  }
+
   async function removeStructure(id: string) {
     if (!can('manage_projects')) throw new Error('Tu rol no permite eliminar estructuras.')
     const inspIds = inspections.value.filter((i) => i.structureId === id).map((i) => i.id)
@@ -620,7 +662,9 @@ export const useInspectionStore = defineStore('inspection', () => {
     weather?: string
   }) {
     if (!selectedStructureId.value) return
-    if (!can('edit_data')) throw new Error('Tu rol no permite crear campañas.')
+    if (!canWorkOnStructure(selectedStructureId.value)) {
+      throw new Error('No estás asignado a esta estructura.')
+    }
     const insp: Inspection = {
       id: uid(),
       structureId: selectedStructureId.value,
@@ -644,7 +688,9 @@ export const useInspectionStore = defineStore('inspection', () => {
     resultSummary: string
   }) {
     if (!activeInspection.value) return
-    if (!can('edit_data')) throw new Error('Tu rol no permite registrar ensayos.')
+    if (!canWorkOnStructure(structureOfInspection(activeInspection.value.id))) {
+      throw new Error('No estás asignado a esta estructura.')
+    }
     const t: Test = {
       id: uid(),
       inspectionId: activeInspection.value.id,
@@ -657,7 +703,10 @@ export const useInspectionStore = defineStore('inspection', () => {
     return t
   }
   async function removeTest(id: string) {
-    if (!can('edit_data')) throw new Error('Tu rol no permite eliminar ensayos.')
+    const t = tests.value.find((x) => x.id === id)
+    if (t && !canWorkOnStructure(structureOfInspection(t.inspectionId))) {
+      throw new Error('No estás asignado a esta estructura.')
+    }
     tests.value = tests.value.filter((t) => t.id !== id)
     await db.tests.delete(id)
   }
@@ -712,9 +761,11 @@ export const useInspectionStore = defineStore('inspection', () => {
     teamMembers,
     canManageTeam,
     canManageProjects,
-    canEditData,
+    canWorkHere,
     // acciones
     can,
+    canWorkOnStructure,
+    assignInspectors,
     loadTeams,
     selectTeam,
     createTeam,

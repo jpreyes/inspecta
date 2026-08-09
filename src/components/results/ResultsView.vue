@@ -22,7 +22,7 @@ const {
   severityCounts,
   currentFindings,
   currentTests,
-  canEditData,
+  canWorkHere,
   activeTeam,
 } = storeToRefs(store)
 
@@ -315,7 +315,7 @@ async function generateDocx() {
       <div class="flex items-center justify-between border-b border-ink-800 px-4 py-3">
         <h2 class="text-sm font-semibold text-ink-200">Ensayos</h2>
         <button
-          v-if="activeInspection && canEditData"
+          v-if="activeInspection && canWorkHere"
           class="flex items-center gap-1 rounded-md border border-ink-700 px-2 py-1 text-xs text-ink-300 hover:bg-ink-800"
           @click="showNewTest ? (showNewTest = false) : openNewTest()"
         >
@@ -350,7 +350,7 @@ async function generateDocx() {
             <div class="flex items-center gap-3">
               <span class="text-xs text-ink-500">{{ fmt(t.executedAt) }}</span>
               <button
-                v-if="canEditData"
+                v-if="canWorkHere"
                 class="text-ink-600 opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
                 title="Eliminar ensayo"
                 aria-label="Eliminar ensayo"

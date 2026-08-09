@@ -101,6 +101,9 @@ export interface Structure {
   site?: SiteConfig
   /** Equipo dueño. Vacío = registro personal (modo local, sin servidor). */
   teamId?: string
+  /** Inspectores asignados a esta estructura (ids de usuario). Lista vacía =
+   *  abierta a todos los inspectores del equipo. Ver src/types/team.ts. */
+  inspectorIds?: string[]
 }
 
 /** ¿La estructura tiene modelo 3D (geometría) para el gemelo digital? */

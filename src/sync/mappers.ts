@@ -37,6 +37,7 @@ export function structureToRemote(s: Structure, owner: string): Remote {
     vulnerability: s.vulnerability ?? {},
     site: s.site ?? {},
     team: rel(s.teamId),
+    inspectors: s.inspectorIds ?? [],
     owner,
   }
 }
@@ -133,6 +134,7 @@ export function structureFromRemote(r: any): Structure {
     vulnerability: vuln,
     site,
     teamId: r.team || undefined,
+    inspectorIds: Array.isArray(r.inspectors) ? r.inspectors : undefined,
   }
 }
 
