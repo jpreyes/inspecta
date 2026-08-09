@@ -99,6 +99,8 @@ export interface Structure {
   vulnerability?: Record<string, number>
   /** Amenaza/exposición sísmica del sitio (NCh433). Ver src/data/hazard.ts. */
   site?: SiteConfig
+  /** Equipo dueño. Vacío = registro personal (modo local, sin servidor). */
+  teamId?: string
 }
 
 /** ¿La estructura tiene modelo 3D (geometría) para el gemelo digital? */
@@ -112,6 +114,15 @@ export interface Project {
   client?: string
   location?: { lat: number; lng: number; address?: string }
   createdAt: string
+  /** Equipo dueño. Vacío = registro personal (modo local, sin servidor). */
+  teamId?: string
+}
+
+/** Quién registró algo. `authorName` se guarda denormalizado para que el
+ *  informe muestre el autor aunque se genere sin conexión. */
+export interface Authored {
+  authorId?: string
+  authorName?: string
 }
 
 /** Foto asociada a un hallazgo. Offline: `dataUrl` (base64). Tras sincronizar:
@@ -151,6 +162,11 @@ export interface Finding {
   notes?: string
   photos: Photo[]
   createdAt: string
+  /** Equipo dueño. Vacío = registro personal (modo local, sin servidor). */
+  teamId?: string
+  /** Quién registró el hallazgo. */
+  authorId?: string
+  authorName?: string
 }
 
 /** Una campaña de inspección periódica (una visita a terreno con su fecha). */
@@ -158,9 +174,15 @@ export interface Inspection {
   id: string
   structureId: string
   date: string // ISO — fecha de la visita
+  /** Nombre del inspector a cargo (texto; con equipo se elige de los miembros). */
   inspector: string
+  /** Usuario miembro del equipo que figura como inspector, si aplica. */
+  inspectorId?: string
   weather?: string
   summary?: string
+  teamId?: string
+  authorId?: string
+  authorName?: string
 }
 
 /** Ensayo de material / campo asociado a una campaña (esclerometría, testigos…). */
@@ -175,6 +197,9 @@ export interface Test {
   sampleLocation?: string // elementId o descripción
   resultSummary: string // ej. "f'c estimado 24 MPa"
   createdAt: string
+  teamId?: string
+  authorId?: string
+  authorName?: string
 }
 
 export const CONDITION = {

@@ -8,7 +8,7 @@ import { CONDITION, SEVERITY, findingIndex } from '../../types/inspection'
 import InspectionSelector from '../inspection/InspectionSelector.vue'
 
 const store = useInspectionStore()
-const { activeStructure, activeInspection, activeHasModel, currentFindings, structureCondition, structureConditionKey } =
+const { activeStructure, activeInspection, activeHasModel, currentFindings, structureCondition, structureConditionKey, canEditData } =
   storeToRefs(store)
 
 const condition = computed(() => CONDITION[structureConditionKey.value])
@@ -17,6 +17,15 @@ function fmt(d?: string) {
   return d
     ? new Date(d + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })
     : '—'
+}
+
+/** Fecha/hora de registro (createdAt es ISO completo, no solo la fecha). */
+function fmtStamp(iso?: string) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return isNaN(d.getTime())
+    ? ''
+    : d.toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })
 }
 </script>
 
@@ -41,6 +50,7 @@ function fmt(d?: string) {
           <span class="text-xs text-ink-500">{{ structureCondition }}/100</span>
         </div>
         <button
+          v-if="canEditData"
           class="flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-ink-950 hover:bg-brand-500"
           @click="store.openDamageForm()"
         >
@@ -64,6 +74,7 @@ function fmt(d?: string) {
             <th class="px-3 py-2 font-medium">Gravedad</th>
             <th class="px-3 py-2 text-right font-medium">Ext.</th>
             <th class="px-3 py-2 font-medium">Fotos</th>
+            <th class="px-3 py-2 font-medium">Registró</th>
             <th class="px-3 py-2"></th>
           </tr>
         </thead>
@@ -104,8 +115,17 @@ function fmt(d?: string) {
               </div>
               <span v-else class="text-[11px] text-ink-600">—</span>
             </td>
+            <td class="px-3 py-2 text-[11px] text-ink-500">
+              {{ f.authorName || '—' }}
+              <span class="block text-[10px] text-ink-600">{{ fmtStamp(f.createdAt) }}</span>
+            </td>
             <td class="px-3 py-2 text-right">
-              <button class="text-ink-600 hover:text-red-400" title="Eliminar" @click="store.removeFinding(f.id)">
+              <button
+                v-if="canEditData"
+                class="text-ink-600 hover:text-red-400"
+                title="Eliminar"
+                @click="store.removeFinding(f.id)"
+              >
                 <Trash2 :size="14" />
               </button>
             </td>
@@ -118,11 +138,15 @@ function fmt(d?: string) {
     <div v-else class="rounded-xl border border-dashed border-ink-800 px-4 py-12 text-center">
       <p class="text-sm text-ink-400">Sin daños registrados en esta campaña.</p>
       <button
+        v-if="canEditData"
         class="mx-auto mt-3 flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-ink-950 hover:bg-brand-500"
         @click="store.openDamageForm()"
       >
         <Plus :size="16" /> Registrar primer daño
       </button>
+      <p v-else class="mt-2 text-xs text-ink-600">
+        Tu rol solo permite consultar. Un inspector del equipo debe registrar los daños.
+      </p>
     </div>
   </section>
 </template>

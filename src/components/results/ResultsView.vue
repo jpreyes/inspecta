@@ -22,6 +22,8 @@ const {
   severityCounts,
   currentFindings,
   currentTests,
+  canEditData,
+  activeTeam,
 } = storeToRefs(store)
 
 const condition = computed(() => CONDITION[structureConditionKey.value])
@@ -115,6 +117,8 @@ async function generateDocx() {
       irregularities: structureIrregularities.value,
       nonStructuralCount: nonStructuralCount.value,
       generatedAt: new Date().toISOString(),
+      teamName: activeTeam.value?.name,
+      preparedBy: store.authUser?.name || store.authUser?.email || undefined,
     })
   } finally {
     generating.value = false
@@ -311,7 +315,7 @@ async function generateDocx() {
       <div class="flex items-center justify-between border-b border-ink-800 px-4 py-3">
         <h2 class="text-sm font-semibold text-ink-200">Ensayos</h2>
         <button
-          v-if="activeInspection"
+          v-if="activeInspection && canEditData"
           class="flex items-center gap-1 rounded-md border border-ink-700 px-2 py-1 text-xs text-ink-300 hover:bg-ink-800"
           @click="showNewTest ? (showNewTest = false) : openNewTest()"
         >
@@ -346,6 +350,7 @@ async function generateDocx() {
             <div class="flex items-center gap-3">
               <span class="text-xs text-ink-500">{{ fmt(t.executedAt) }}</span>
               <button
+                v-if="canEditData"
                 class="text-ink-600 opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
                 title="Eliminar ensayo"
                 aria-label="Eliminar ensayo"

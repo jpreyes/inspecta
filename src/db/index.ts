@@ -29,6 +29,17 @@ db.version(2).stores({
   tests: 'id, inspectionId',
 })
 
+// v3: equipos. Se indexa `teamId` para poder filtrar por equipo sin recorrer
+// toda la tabla. Los registros previos quedan sin teamId (personales), que es
+// exactamente el modo local — no requieren migración de datos.
+db.version(3).stores({
+  projects: 'id, name, teamId',
+  structures: 'id, projectId, teamId',
+  inspections: 'id, structureId, date, teamId',
+  findings: 'id, inspectionId, elementId, teamId',
+  tests: 'id, inspectionId, teamId',
+})
+
 /** Siembra cada tabla que esté vacía (robusto ante bases ya creadas). */
 export async function seedIfEmpty() {
   if ((await db.projects.count()) === 0) await db.projects.bulkAdd(seedProjects)

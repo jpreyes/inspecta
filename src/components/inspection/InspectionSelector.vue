@@ -8,30 +8,65 @@ import { useInspectionStore } from '../../stores/inspection'
 import { CONDITION } from '../../types/inspection'
 
 const store = useInspectionStore()
-const { structureInspections, inspectionIndex, activeInspection, conditionByCampaign } =
-  storeToRefs(store)
+const {
+  structureInspections,
+  inspectionIndex,
+  activeInspection,
+  conditionByCampaign,
+  canEditData,
+  teamMembers,
+  authUser,
+} = storeToRefs(store)
 
 const hasInspections = computed(() => structureInspections.value.length > 0)
 
+/** Con equipo, el inspector se elige entre los miembros que trabajan en terreno.
+ *  Sin equipo (modo local) sigue siendo texto libre. */
+const fieldMembers = computed(() =>
+  teamMembers.value.filter((m) => m.role === 'admin' || m.role === 'inspector'),
+)
+const pickInspector = computed(() => fieldMembers.value.length > 0)
+
 // Crear nueva campaña de inspección periódica
 const showNew = ref(false)
-const draft = reactive({ date: '', inspector: '', weather: '', summary: '' })
+const draft = reactive({ date: '', inspector: '', inspectorId: '', weather: '', summary: '' })
+const error = ref('')
+
 function openNew() {
   draft.date = new Date().toISOString().slice(0, 10)
-  draft.inspector = activeInspection.value?.inspector ?? ''
+  // Con equipo, por defecto se propone al propio usuario.
+  const me = fieldMembers.value.find((m) => m.userId === authUser.value?.id)
+  draft.inspectorId = me?.userId ?? ''
+  draft.inspector = me
+    ? me.email || me.name || me.userId
+    : (activeInspection.value?.inspector ?? '')
   draft.weather = ''
   draft.summary = ''
+  error.value = ''
   showNew.value = true
 }
+
+function onPickInspector(userId: string) {
+  draft.inspectorId = userId
+  const m = fieldMembers.value.find((x) => x.userId === userId)
+  draft.inspector = m ? m.email || m.name || m.userId : ''
+}
+
 async function createInspection() {
   if (!draft.date || !draft.inspector.trim()) return
-  await store.addInspection({
-    date: draft.date,
-    inspector: draft.inspector.trim(),
-    weather: draft.weather.trim() || undefined,
-    summary: draft.summary.trim() || undefined,
-  })
-  showNew.value = false
+  error.value = ''
+  try {
+    await store.addInspection({
+      date: draft.date,
+      inspector: draft.inspector.trim(),
+      inspectorId: draft.inspectorId || undefined,
+      weather: draft.weather.trim() || undefined,
+      summary: draft.summary.trim() || undefined,
+    })
+    showNew.value = false
+  } catch (e) {
+    error.value = (e as Error)?.message ?? String(e)
+  }
 }
 
 const conditionColor = (id: string) => {
@@ -66,6 +101,7 @@ function step(dir: number) {
           <span class="text-ink-500"> · {{ activeInspection.inspector }}</span>
         </div>
         <button
+          v-if="canEditData"
           class="flex items-center gap-1 rounded-md border border-ink-700 px-2 py-1 text-xs text-ink-300 hover:bg-ink-800"
           @click="openNew"
         >
@@ -90,7 +126,19 @@ function step(dir: number) {
       </label>
       <label class="flex-1 text-[11px] text-ink-400">
         Inspector
+        <select
+          v-if="pickInspector"
+          :value="draft.inspectorId"
+          class="mt-0.5 block w-full rounded-md border border-ink-700 bg-ink-800 px-2 py-1 text-xs text-ink-200"
+          @change="onPickInspector(($event.target as HTMLSelectElement).value)"
+        >
+          <option value="">— Elige un miembro —</option>
+          <option v-for="m in fieldMembers" :key="m.userId" :value="m.userId">
+            {{ m.email || m.name || m.userId }}
+          </option>
+        </select>
         <input
+          v-else
           v-model="draft.inspector"
           type="text"
           placeholder="Nombre"
@@ -121,6 +169,7 @@ function step(dir: number) {
       <button type="button" class="rounded-md border border-ink-700 px-2 py-1.5 text-xs text-ink-300" @click="showNew = false">
         Cancelar
       </button>
+      <p v-if="error" class="w-full text-[11px] text-red-400">{{ error }}</p>
     </form>
 
     <div v-if="!hasInspections" class="py-2 text-center text-xs text-ink-500">

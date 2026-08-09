@@ -85,11 +85,42 @@ Todo vive en IndexedDB; la app funciona 100% sin señal. El backend PocketBase e
 capa opcional de sync/compartir. La web habla siempre al mismo origen `/api`, así que
 servir `dist/` desde `pb_public/` no requiere cambios de código. Ver `DEPLOY.md`.
 
+### Equipos, roles y trazabilidad
+`src/types/team.ts`. Un **equipo** agrupa proyectos, estructuras y campañas, y tiene
+miembros con un rol cada uno:
+
+| Rol | Gestiona el equipo | Proyectos y estructuras | Campañas, hallazgos, ensayos | Ver e informar |
+|---|---|---|---|---|
+| Administrador | ✅ | ✅ | ✅ | ✅ |
+| Inspector | — | — | ✅ | ✅ |
+| Revisor | — | — | — | ✅ |
+| Cliente | — | — | — | ✅ |
+
+Los roles se guardan como **cuatro listas de usuarios en el propio equipo**
+(`admins`/`inspectors`/`reviewers`/`clients`), no en una colección `memberships`:
+en PocketBase las condiciones sobre una relación multi-valor se evalúan de forma
+independiente entre filas, así que "la misma membresía tiene este usuario Y este rol"
+no es expresable de forma confiable en una regla. Con listas por rol, cada regla mira
+un solo campo y la autorización real la impone el servidor, no la interfaz.
+
+**Sin equipo la app está en modo local**: sin sesión los datos son de ese dispositivo,
+no hay a quién restringir y el acceso es completo — es lo que mantiene intacto el
+offline-first. Los permisos solo aplican cuando hay sesión y equipo activo.
+
+Las **cuentas no se crean desde la app**: se crean en el panel de PocketBase (`/_/`),
+y desde la app se invita por email a un usuario que ya existe. El auto-registro viene
+cerrado a propósito (`pb_migrations/1721000200_close_signup.js`).
+
+**Trazabilidad**: campañas, hallazgos y ensayos guardan `author` (quién lo registró).
+El nombre se denormaliza en local (`authorName`) para que el informe muestre el autor
+aunque se genere sin conexión. Aparece en la lista de daños y en el informe Word.
+
 ## Estructura
 
 ```
 src/
   types/inspection.ts       # dominio + scoring (condición, prioridad)
+  types/team.ts             # equipos, roles y matriz de permisos
   data/catalog.ts           # catálogo edificio/puente (generado)
   data/vulnerability.ts     # irregularidades NCh433/ASCE 7 + riesgo
   data/hazard.ts            # amenaza sísmica NCh433
@@ -102,6 +133,7 @@ src/
   ui/icons.ts, damage-icons.ts   # íconos de daño (SVG propios)
   components/
     layout/{TopBar,Sidebar}.vue
+    team/TeamPanel.vue        # equipo activo, miembros, invitar, roles
     twin/TwinCanvas.vue
     list/DamageListView.vue
     results/{ResultsView,VulnerabilityPanel}.vue

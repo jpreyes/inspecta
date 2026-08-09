@@ -31,6 +31,10 @@ export interface ReportData {
   irregularities: RegisteredIrreg[]
   nonStructuralCount: number
   generatedAt: string // ISO (se inyecta desde el navegador)
+  /** Equipo dueño del trabajo, si la app está conectada a un servidor. */
+  teamName?: string
+  /** Quién generó el informe (email o nombre del usuario en sesión). */
+  preparedBy?: string
 }
 
 const INK = '334155'
@@ -130,8 +134,12 @@ export async function buildReport(d: ReportData): Promise<Blob> {
   body.push(kv('Estructura', `${d.structure.name} (${TYPE_LABEL[d.structure.type] ?? d.structure.type})`))
   const loc = d.project?.location
   if (loc) body.push(kv('Ubicación', `${loc.address ? loc.address + ' · ' : ''}${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`))
+  if (d.teamName) body.push(kv('Equipo', d.teamName))
   body.push(kv('Campaña de inspección', fmtDate(d.inspection.date)))
   body.push(kv('Inspector', d.inspection.inspector))
+  if (d.inspection.authorName && d.inspection.authorName !== d.inspection.inspector) {
+    body.push(kv('Campaña registrada por', d.inspection.authorName))
+  }
   if (d.inspection.weather) body.push(kv('Clima', d.inspection.weather))
   if (d.inspection.summary) body.push(kv('Resumen', d.inspection.summary))
 
@@ -213,7 +221,12 @@ export async function buildReport(d: ReportData): Promise<Blob> {
   if (!d.findings.length) {
     body.push(new Paragraph({ children: [new TextRun({ text: 'Sin hallazgos registrados en esta campaña.', size: 20, color: MUTED })] }))
   } else {
-    const rows = [headerRow(['Elemento / zona', 'Material', 'Daño · causa · notas', 'Sev.', 'Ext.', 'Índ.', 'Prior.'], [20, 13, 39, 9, 7, 6, 6])]
+    const rows = [
+      headerRow(
+        ['Elemento / zona', 'Material', 'Daño · causa · notas', 'Sev.', 'Ext.', 'Índ.', 'Prior.', 'Registró'],
+        [18, 11, 33, 8, 6, 6, 6, 12],
+      ),
+    ]
     for (const f of d.findings) {
       rows.push(
         new TableRow({
@@ -233,6 +246,7 @@ export async function buildReport(d: ReportData): Promise<Blob> {
             cell(`${f.extension}%`, { size: 16 }),
             cell(String(findingIndex(f)), { size: 16 }),
             cell(String(findingPriority(f)), { size: 16, bold: true }),
+            cell(f.authorName ?? '—', { size: 15, color: MUTED }),
           ],
         }),
       )
@@ -281,7 +295,15 @@ export async function buildReport(d: ReportData): Promise<Blob> {
     new Paragraph({
       spacing: { before: 360 },
       alignment: AlignmentType.RIGHT,
-      children: [new TextRun({ text: `Generado con Inspecta · ${fmtDate(d.generatedAt)}`, size: 16, color: MUTED })],
+      children: [
+        new TextRun({
+          text:
+            `Generado con Inspecta · ${fmtDate(d.generatedAt)}` +
+            (d.preparedBy ? ` · por ${d.preparedBy}` : ''),
+          size: 16,
+          color: MUTED,
+        }),
+      ],
     }),
   )
 

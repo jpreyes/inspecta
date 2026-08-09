@@ -17,6 +17,16 @@ import { hazardIndex, type SiteConfig } from '../data/hazard'
 import { db, seedIfEmpty } from '../db'
 import { backend, type RemoteUser } from '../sync/backend'
 import { syncNow as runSync } from '../sync/engine'
+import {
+  can as roleCan,
+  membersOf,
+  roleInTeam,
+  ROLE_FIELD,
+  type Permission,
+  type Role,
+  type Team,
+  type TeamMember,
+} from '../types/team'
 
 /** Copia plana (sin proxies reactivos de Vue). IndexedDB no puede clonar proxies
  *  anidados (p.ej. las fotos dentro de un hallazgo), y se perdían al guardar. */
@@ -73,6 +83,53 @@ export const useInspectionStore = defineStore('inspection', () => {
   const lastSyncAt = ref<string | null>(null)
   const syncMessage = ref('')
 
+  // ── Equipos y roles ────────────────────────────────────
+  const teams = ref<Team[]>([])
+  const activeTeamId = ref<string | null>(localStorage.getItem('inspecta.team'))
+  /** Nombres de usuarios ya resueltos (id → nombre visible). */
+  const userNames = ref<Record<string, string>>({})
+  const teamMessage = ref('')
+
+  const activeTeam = computed<Team | null>(
+    () => teams.value.find((t) => t.id === activeTeamId.value) ?? null,
+  )
+
+  /**
+   * Rol del usuario en el equipo activo. `null` = modo local: no hay sesión ni
+   * equipo, los datos son de este dispositivo y no hay a quién restringir.
+   */
+  const myRole = computed<Role | null>(() =>
+    roleInTeam(activeTeam.value, authUser.value?.id ?? null),
+  )
+
+  /** Miembros del equipo activo con su nombre visible resuelto. */
+  const teamMembers = computed<TeamMember[]>(() =>
+    membersOf(activeTeam.value).map((m) => ({
+      ...m,
+      name:
+        userNames.value[m.userId] ||
+        (m.userId === authUser.value?.id ? authUser.value.email : undefined),
+      email: m.userId === authUser.value?.id ? authUser.value?.email : undefined,
+    })),
+  )
+
+  /** ¿El usuario puede hacer esto? Sin equipo (modo local) siempre puede. */
+  function can(p: Permission): boolean {
+    return roleCan(myRole.value, p)
+  }
+  const canManageTeam = computed(() => can('manage_team'))
+  const canManageProjects = computed(() => can('manage_projects'))
+  const canEditData = computed(() => can('edit_data'))
+
+  /** Sello de equipo + autor para los registros nuevos. */
+  function stamp() {
+    return {
+      teamId: activeTeamId.value ?? undefined,
+      authorId: authUser.value?.id,
+      authorName: authUser.value?.name || authUser.value?.email || undefined,
+    }
+  }
+
   // ── Carga ──────────────────────────────────────────────
   /** Recarga los datos en memoria desde Dexie. */
   async function reload() {
@@ -91,6 +148,12 @@ export const useInspectionStore = defineStore('inspection', () => {
     selectedStructureId.value = structures.value[0]?.id ?? null
     inspectionIndex.value = Math.max(0, structureInspections.value.length - 1)
     ready.value = true
+    // Con sesión guardada, recupera equipos y rol sin bloquear el arranque.
+    if (backend.isAuthenticated) {
+      loadTeams().catch(() => {
+        teamMessage.value = 'No se pudieron cargar los equipos (sin conexión).'
+      })
+    }
   }
 
   // ── Getters ────────────────────────────────────────────
@@ -260,11 +323,117 @@ export const useInspectionStore = defineStore('inspection', () => {
   // ── Auth + sync ────────────────────────────────────────
   async function login(email: string, password: string) {
     authUser.value = await backend.login(email, password)
+    await loadTeams()
     return authUser.value
   }
   function logout() {
     backend.logout()
     authUser.value = null
+    teams.value = []
+    userNames.value = {}
+    // No se limpia activeTeamId: al volver a entrar se reencuentra el equipo.
+  }
+
+  // ── Equipos ────────────────────────────────────────────
+
+  /** Trae los equipos del usuario y resuelve los nombres de sus miembros. */
+  async function loadTeams() {
+    if (!backend.isAuthenticated) return
+    teams.value = await backend.listTeams()
+    if (!teams.value.find((t) => t.id === activeTeamId.value)) {
+      selectTeam(teams.value[0]?.id ?? null)
+    }
+    await resolveMemberNames()
+  }
+
+  async function resolveMemberNames() {
+    const ids = [...new Set(teams.value.flatMap((t) => membersOf(t).map((m) => m.userId)))]
+    const missing = ids.filter((id) => !userNames.value[id])
+    if (!missing.length) return
+    try {
+      for (const u of await backend.usersByIds(missing)) {
+        userNames.value[u.id] = u.name || u.email || u.id
+      }
+    } catch {
+      /* sin permiso o sin red: se muestra el id */
+    }
+  }
+
+  function selectTeam(id: string | null) {
+    activeTeamId.value = id
+    if (id) localStorage.setItem('inspecta.team', id)
+    else localStorage.removeItem('inspecta.team')
+  }
+
+  async function createTeam(name: string) {
+    if (!authUser.value) throw new Error('Inicia sesión primero')
+    const t = await backend.createTeam(name.trim(), authUser.value.id)
+    teams.value.push(t)
+    selectTeam(t.id)
+    return t
+  }
+
+  /** Guarda el equipo en el servidor y refleja el resultado en memoria. */
+  async function persistTeam(next: Team) {
+    const saved = await backend.saveTeamRoles(next)
+    const i = teams.value.findIndex((t) => t.id === saved.id)
+    if (i >= 0) teams.value[i] = saved
+    await resolveMemberNames()
+    return saved
+  }
+
+  /** Quita un usuario de todas las listas de rol (copia nueva, sin mutar). */
+  function withoutMember(team: Team, userId: string): Team {
+    return {
+      ...team,
+      admins: team.admins.filter((id) => id !== userId),
+      inspectors: team.inspectors.filter((id) => id !== userId),
+      reviewers: team.reviewers.filter((id) => id !== userId),
+      clients: team.clients.filter((id) => id !== userId),
+    }
+  }
+
+  /**
+   * Invita por email a un usuario que YA existe. La app no crea cuentas: se
+   * crean en el panel de PocketBase (`/_/`). Devuelve un mensaje si no existe.
+   */
+  async function inviteMember(email: string, role: Role) {
+    const team = activeTeam.value
+    if (!team) throw new Error('Selecciona un equipo primero')
+    const user = await backend.findUserByEmail(email.trim())
+    if (!user) {
+      throw new Error(
+        `No existe un usuario con ${email.trim()}. Créalo primero en el panel de PocketBase (/_/).`,
+      )
+    }
+    if (membersOf(team).some((m) => m.userId === user.id)) {
+      throw new Error('Ese usuario ya es miembro del equipo.')
+    }
+    const next = withoutMember(team, user.id)
+    next[ROLE_FIELD[role]] = [...next[ROLE_FIELD[role]], user.id]
+    userNames.value[user.id] = user.name || user.email || user.id
+    return persistTeam(next)
+  }
+
+  async function setMemberRole(userId: string, role: Role) {
+    const team = activeTeam.value
+    if (!team) return
+    // No dejar el equipo sin ningún administrador.
+    if (team.admins.includes(userId) && role !== 'admin' && team.admins.length === 1) {
+      throw new Error('El equipo debe conservar al menos un administrador.')
+    }
+    const next = withoutMember(team, userId)
+    next[ROLE_FIELD[role]] = [...next[ROLE_FIELD[role]], userId]
+    return persistTeam(next)
+  }
+
+  async function removeMember(userId: string) {
+    const team = activeTeam.value
+    if (!team) return
+    if (team.admins.includes(userId) && team.admins.length === 1) {
+      throw new Error('El equipo debe conservar al menos un administrador.')
+    }
+    return persistTeam(withoutMember(team, userId))
   }
   async function syncNow() {
     if (!authUser.value) throw new Error('Inicia sesión primero')
@@ -321,11 +490,13 @@ export const useInspectionStore = defineStore('inspection', () => {
     notes?: string
   }) {
     if (!activeInspection.value) return
+    if (!can('edit_data')) throw new Error('Tu rol no permite registrar hallazgos.')
     const f: Finding = {
       id: uid(),
       inspectionId: activeInspection.value.id,
       photos: [],
       createdAt: new Date().toISOString(),
+      ...stamp(),
       ...payload,
     }
     findings.value.push(f)
@@ -334,6 +505,7 @@ export const useInspectionStore = defineStore('inspection', () => {
   }
 
   async function updateFinding(id: string, patch: Partial<Finding>) {
+    if (!can('edit_data')) throw new Error('Tu rol no permite editar hallazgos.')
     const f = findings.value.find((x) => x.id === id)
     if (!f) return
     Object.assign(f, patch)
@@ -341,6 +513,7 @@ export const useInspectionStore = defineStore('inspection', () => {
   }
 
   async function removeFinding(id: string) {
+    if (!can('edit_data')) throw new Error('Tu rol no permite eliminar hallazgos.')
     findings.value = findings.value.filter((f) => f.id !== id)
     await db.findings.delete(id)
   }
@@ -366,11 +539,13 @@ export const useInspectionStore = defineStore('inspection', () => {
 
   // ── CRUD de proyectos ──────────────────────────────────
   async function addProject(payload: { name: string; client?: string }) {
+    if (!can('manage_projects')) throw new Error('Tu rol no permite crear proyectos.')
     const p: Project = {
       id: uid(),
       name: payload.name.trim(),
       client: payload.client?.trim() || undefined,
       createdAt: new Date().toISOString(),
+      teamId: activeTeamId.value ?? undefined,
     }
     projects.value.push(p)
     await db.projects.add(plain(p))
@@ -383,6 +558,7 @@ export const useInspectionStore = defineStore('inspection', () => {
     await db.projects.put(plain(p))
   }
   async function removeProject(id: string) {
+    if (!can('manage_projects')) throw new Error('Tu rol no permite eliminar proyectos.')
     for (const s of structures.value.filter((s) => s.projectId === id)) await removeStructure(s.id)
     projects.value = projects.value.filter((p) => p.id !== id)
     await db.projects.delete(id)
@@ -395,6 +571,7 @@ export const useInspectionStore = defineStore('inspection', () => {
     type: StructureType
     grid?: Structure['grid']
   }) {
+    if (!can('manage_projects')) throw new Error('Tu rol no permite crear estructuras.')
     const s: Structure = {
       id: uid(),
       projectId: payload.projectId,
@@ -402,6 +579,7 @@ export const useInspectionStore = defineStore('inspection', () => {
       type: payload.type,
       grid: payload.grid,
       elements: payload.grid ? generateFrame(payload.grid) : [],
+      teamId: activeTeamId.value ?? undefined,
     }
     structures.value.push(s)
     await db.structures.add(plain(s))
@@ -415,6 +593,7 @@ export const useInspectionStore = defineStore('inspection', () => {
     await db.structures.put(plain(s))
   }
   async function removeStructure(id: string) {
+    if (!can('manage_projects')) throw new Error('Tu rol no permite eliminar estructuras.')
     const inspIds = inspections.value.filter((i) => i.structureId === id).map((i) => i.id)
     findings.value = findings.value.filter((f) => !inspIds.includes(f.inspectionId))
     tests.value = tests.value.filter((t) => !inspIds.includes(t.inspectionId))
@@ -435,14 +614,17 @@ export const useInspectionStore = defineStore('inspection', () => {
 
   async function addInspection(payload: {
     inspector: string
+    inspectorId?: string
     date: string
     summary?: string
     weather?: string
   }) {
     if (!selectedStructureId.value) return
+    if (!can('edit_data')) throw new Error('Tu rol no permite crear campañas.')
     const insp: Inspection = {
       id: uid(),
       structureId: selectedStructureId.value,
+      ...stamp(),
       ...payload,
     }
     inspections.value.push(insp)
@@ -462,10 +644,12 @@ export const useInspectionStore = defineStore('inspection', () => {
     resultSummary: string
   }) {
     if (!activeInspection.value) return
+    if (!can('edit_data')) throw new Error('Tu rol no permite registrar ensayos.')
     const t: Test = {
       id: uid(),
       inspectionId: activeInspection.value.id,
       createdAt: new Date().toISOString(),
+      ...stamp(),
       ...payload,
     }
     tests.value.push(t)
@@ -473,6 +657,7 @@ export const useInspectionStore = defineStore('inspection', () => {
     return t
   }
   async function removeTest(id: string) {
+    if (!can('edit_data')) throw new Error('Tu rol no permite eliminar ensayos.')
     tests.value = tests.value.filter((t) => t.id !== id)
     await db.tests.delete(id)
   }
@@ -498,6 +683,9 @@ export const useInspectionStore = defineStore('inspection', () => {
     syncing,
     lastSyncAt,
     syncMessage,
+    teams,
+    activeTeamId,
+    teamMessage,
     // getters
     activeStructure,
     activeProject,
@@ -519,7 +707,20 @@ export const useInspectionStore = defineStore('inspection', () => {
     conditionByCampaign,
     severityCounts,
     currentTests,
+    activeTeam,
+    myRole,
+    teamMembers,
+    canManageTeam,
+    canManageProjects,
+    canEditData,
     // acciones
+    can,
+    loadTeams,
+    selectTeam,
+    createTeam,
+    inviteMember,
+    setMemberRole,
+    removeMember,
     setIrregularity,
     setSite,
     addProject,

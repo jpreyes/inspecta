@@ -69,11 +69,18 @@ export async function syncNow(): Promise<SyncResult> {
       pulled++
     }
   }
+  // `author` se expande para poder mostrar quién registró cada cosa sin conexión.
   await pullInto(db.projects, (await backend.pull('projects')).map(M.projectFromRemote))
   await pullInto(db.structures, (await backend.pull('structures')).map(M.structureFromRemote))
-  await pullInto(db.inspections, (await backend.pull('inspections')).map(M.inspectionFromRemote))
-  await pullInto<Finding>(db.findings, (await backend.pull('findings')).map(M.findingFromRemote))
-  await pullInto(db.tests, (await backend.pull('tests')).map(M.testFromRemote))
+  await pullInto(
+    db.inspections,
+    (await backend.pull('inspections', undefined, 'author')).map(M.inspectionFromRemote),
+  )
+  await pullInto<Finding>(
+    db.findings,
+    (await backend.pull('findings', undefined, 'author')).map(M.findingFromRemote),
+  )
+  await pullInto(db.tests, (await backend.pull('tests', undefined, 'author')).map(M.testFromRemote))
 
   return { pushed, photos, pulled }
 }

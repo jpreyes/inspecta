@@ -7,7 +7,7 @@ import { iconForDamage } from '../../ui/icons'
 import { SEVERITY, findingIndex } from '../../types/inspection'
 
 const store = useInspectionStore()
-const { selectedElement, selectedElementFindings, currentFindings, activeInspection } =
+const { selectedElement, selectedElementFindings, currentFindings, activeInspection, canEditData } =
   storeToRefs(store)
 
 const list = computed(() =>
@@ -77,17 +77,22 @@ function register() {
           <img v-for="p in f.photos" :key="p.id" :src="p.dataUrl || p.url" class="h-16 w-16 shrink-0 rounded object-cover" />
         </div>
 
-        <button
-          class="mt-2 flex items-center gap-1 text-[11px] text-ink-500 hover:text-red-400"
-          @click="store.removeFinding(f.id)"
-        >
-          <Trash2 :size="12" /> Eliminar
-        </button>
+        <div class="mt-2 flex items-center justify-between">
+          <span v-if="f.authorName" class="text-[10px] text-ink-600">Registró {{ f.authorName }}</span>
+          <span v-else />
+          <button
+            v-if="canEditData"
+            class="flex items-center gap-1 text-[11px] text-ink-500 hover:text-red-400"
+            @click="store.removeFinding(f.id)"
+          >
+            <Trash2 :size="12" /> Eliminar
+          </button>
+        </div>
       </div>
     </div>
 
     <!-- registrar daño (abre el formulario; el elemento va preseleccionado si hay uno) -->
-    <div class="border-t border-ink-800 p-3">
+    <div v-if="canEditData" class="border-t border-ink-800 p-3">
       <button
         class="flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-600 py-2 text-sm font-medium text-ink-950 hover:bg-brand-500"
         @click="register"

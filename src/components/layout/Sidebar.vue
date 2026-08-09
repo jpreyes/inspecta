@@ -16,7 +16,7 @@ import { useInspectionStore } from '../../stores/inspection'
 import { SEVERITY, type Severity, type StructureType } from '../../types/inspection'
 
 const store = useInspectionStore()
-const { projects, structures, activeStructure, severityByElement, selectedElementId } =
+const { projects, structures, activeStructure, severityByElement, selectedElementId, canManageProjects } =
   storeToRefs(store)
 
 // Estado de despliegue (colapsable)
@@ -177,6 +177,7 @@ const structureDamaged = computed(() => Object.keys(severityByElement.value).len
           <Filter :size="12" /> Con daño
         </button>
         <button
+          v-if="canManageProjects"
           class="flex items-center gap-1 rounded px-1.5 py-0.5 normal-case tracking-normal text-ink-500 transition-colors hover:text-ink-200"
           title="Nuevo proyecto"
           @click="openNewProject"
@@ -249,11 +250,15 @@ const structureDamaged = computed(() => Object.keys(severityByElement.value).len
       <div v-if="!projects.length && ed.mode !== 'new-project'" class="px-2 py-8 text-center">
         <p class="text-xs text-ink-500">Aún no hay proyectos.</p>
         <button
+          v-if="canManageProjects"
           class="mx-auto mt-3 flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-ink-950 hover:bg-brand-500"
           @click="openNewProject"
         >
           <FolderPlus :size="14" /> Crear primer proyecto
         </button>
+        <p v-else class="mt-2 text-[11px] text-ink-600">
+          Tu rol no permite crear proyectos. Pídeselo a un administrador del equipo.
+        </p>
       </div>
       <div v-for="prj in projects" :key="prj.id" class="mb-1">
         <!-- Proyecto -->
@@ -266,7 +271,7 @@ const structureDamaged = computed(() => Object.keys(severityByElement.value).len
             <FolderOpen :size="15" class="shrink-0 text-ink-400" />
             <span class="truncate font-medium">{{ prj.name }}</span>
           </button>
-          <div class="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100">
+          <div v-if="canManageProjects" class="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100">
             <button class="rounded p-1 text-ink-500 hover:text-brand-400" title="Nueva estructura" @click="openNewStructure(prj.id)">
               <Plus :size="13" />
             </button>
@@ -301,7 +306,7 @@ const structureDamaged = computed(() => Object.keys(severityByElement.value).len
                   {{ structureDamaged }}
                 </span>
               </button>
-              <div class="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100">
+              <div v-if="canManageProjects" class="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100">
                 <button class="rounded p-1 text-ink-500 hover:text-ink-200" title="Editar estructura" @click="openEditStructure(str.id, str.name, str.type)">
                   <Pencil :size="12" />
                 </button>

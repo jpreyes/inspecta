@@ -8,6 +8,9 @@ import { backend } from './backend'
 
 type Remote = Record<string, unknown>
 
+/** PocketBase espera '' (no null/undefined) para una relación vacía. */
+const rel = (id?: string) => id ?? ''
+
 // ── local → remoto (para push) ──────────────────────────────
 
 export function projectToRemote(p: Project, owner: string): Remote {
@@ -18,6 +21,7 @@ export function projectToRemote(p: Project, owner: string): Remote {
     lat: p.location?.lat ?? null,
     lng: p.location?.lng ?? null,
     address: p.location?.address ?? '',
+    team: rel(p.teamId),
     owner,
   }
 }
@@ -32,6 +36,7 @@ export function structureToRemote(s: Structure, owner: string): Remote {
     elements: s.elements, // persistimos la lista (necesario para estructuras sin modelo 3D)
     vulnerability: s.vulnerability ?? {},
     site: s.site ?? {},
+    team: rel(s.teamId),
     owner,
   }
 }
@@ -45,6 +50,8 @@ export function inspectionToRemote(i: Inspection, owner: string, conditionScore?
     weather: i.weather ?? '',
     summary: i.summary ?? '',
     condition_score: conditionScore ?? null,
+    team: rel(i.teamId),
+    author: rel(i.authorId),
     owner,
   }
 }
@@ -65,6 +72,8 @@ export function findingToRemote(f: Finding, owner: string): Remote {
     extension: f.extension,
     pin: f.pin ?? null,
     notes: f.notes ?? '',
+    team: rel(f.teamId),
+    author: rel(f.authorId),
     owner,
   }
 }
@@ -80,11 +89,21 @@ export function testToRemote(t: Test, owner: string): Remote {
     laboratory: t.laboratory ?? '',
     sample_location: t.sampleLocation ?? '',
     result_summary: t.resultSummary,
+    team: rel(t.teamId),
+    author: rel(t.authorId),
     owner,
   }
 }
 
 // ── remoto → local (para pull) ──────────────────────────────
+
+/** Nombre visible del autor expandido (`expand.author`). PocketBase oculta el
+ *  email de otros usuarios, así que se prefiere `name`. */
+function authorName(r: any): string | undefined {
+  const a = r?.expand?.author
+  if (!a) return undefined
+  return a.name || a.email || undefined
+}
 
 export function projectFromRemote(r: any): Project {
   const hasLoc = r.lat != null || r.lng != null || r.address
@@ -94,6 +113,7 @@ export function projectFromRemote(r: any): Project {
     client: r.client || undefined,
     location: hasLoc ? { lat: r.lat ?? 0, lng: r.lng ?? 0, address: r.address || undefined } : undefined,
     createdAt: r.created,
+    teamId: r.team || undefined,
   }
 }
 
@@ -112,6 +132,7 @@ export function structureFromRemote(r: any): Structure {
     elements: stored.length ? stored : grid ? generateFrame(grid) : [],
     vulnerability: vuln,
     site,
+    teamId: r.team || undefined,
   }
 }
 
@@ -123,6 +144,9 @@ export function inspectionFromRemote(r: any): Inspection {
     inspector: r.inspector,
     weather: r.weather || undefined,
     summary: r.summary || undefined,
+    teamId: r.team || undefined,
+    authorId: r.author || undefined,
+    authorName: authorName(r),
   }
 }
 
@@ -149,6 +173,9 @@ export function findingFromRemote(r: any): Finding {
       takenAt: r.created,
     })),
     createdAt: r.created,
+    teamId: r.team || undefined,
+    authorId: r.author || undefined,
+    authorName: authorName(r),
   }
 }
 
@@ -164,5 +191,8 @@ export function testFromRemote(r: any): Test {
     sampleLocation: r.sample_location || undefined,
     resultSummary: r.result_summary,
     createdAt: r.created,
+    teamId: r.team || undefined,
+    authorId: r.author || undefined,
+    authorName: authorName(r),
   }
 }

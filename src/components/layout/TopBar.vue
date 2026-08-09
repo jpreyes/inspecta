@@ -5,6 +5,7 @@ import { useInspectionStore } from '../../stores/inspection'
 
 import { Box, ChartColumn, List, Menu } from 'lucide-vue-next'
 import SyncControl from '../sync/SyncControl.vue'
+import TeamPanel from '../team/TeamPanel.vue'
 import { CONDITION, conditionFromScore } from '../../types/inspection'
 
 const store = useInspectionStore()
@@ -83,6 +84,7 @@ const conditionColor = computed(() => CONDITION[conditionFromScore(structureCond
           {{ structureCondition }}
         </span>
       </div>
+      <TeamPanel />
       <SyncControl />
     </div>
   </header>

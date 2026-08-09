@@ -19,6 +19,9 @@ scripts/*.png
 
 # datos locales de PocketBase (nunca versionar)
 pocketbase/pb_data/
+# el binario se descarga por plataforma; las migraciones SÍ se versionan
+pocketbase/pocketbase
+pocketbase/pocketbase.exe
 
 # Editor directories and files
 .vscode/*

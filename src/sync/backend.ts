@@ -1,4 +1,18 @@
 import { pb } from './pocketbase'
+import type { Team } from '../types/team'
+
+/** Registro remoto de `teams` → modelo de la app. */
+function teamFromRecord(rec: Record<string, unknown> & { id: string }): Team {
+  const list = (v: unknown): string[] => (Array.isArray(v) ? (v as string[]) : [])
+  return {
+    id: rec.id,
+    name: String(rec.name ?? ''),
+    admins: list(rec.admins),
+    inspectors: list(rec.inspectors),
+    reviewers: list(rec.reviewers),
+    clients: list(rec.clients),
+  }
+}
 
 // ─────────────────────────────────────────────────────────────
 // Adaptador de backend remoto (hoy PocketBase).
@@ -14,6 +28,7 @@ export type RemoteCollection = 'projects' | 'structures' | 'inspections' | 'find
 export interface RemoteUser {
   id: string
   email: string
+  name?: string
 }
 
 export const backend = {
@@ -22,7 +37,9 @@ export const backend = {
   },
   get user(): RemoteUser | null {
     const rec = pb.authStore.record
-    return rec ? { id: rec.id, email: (rec as { email?: string }).email ?? '' } : null
+    if (!rec) return null
+    const r = rec as { email?: string; name?: string }
+    return { id: rec.id, email: r.email ?? '', name: r.name || undefined }
   },
 
   /** ¿Está el backend accesible? Si no (offline o no desplegado), seguimos local. */
@@ -37,18 +54,87 @@ export const backend = {
 
   async login(email: string, password: string): Promise<RemoteUser> {
     const auth = await pb.collection('users').authWithPassword(email, password)
-    return { id: auth.record.id, email: (auth.record as { email?: string }).email ?? email }
+    const r = auth.record as { email?: string; name?: string }
+    return { id: auth.record.id, email: r.email ?? email, name: r.name || undefined }
   },
   logout(): void {
     pb.authStore.clear()
   },
 
+  // ── Equipos y miembros ──────────────────────────────────────
+
+  /** Equipos donde el usuario es miembro (las reglas del servidor ya filtran). */
+  async listTeams(): Promise<Team[]> {
+    const recs = await pb.collection('teams').getFullList({ sort: 'name' })
+    return recs.map(teamFromRecord)
+  },
+
+  async createTeam(name: string, adminId: string): Promise<Team> {
+    const rec = await pb.collection('teams').create({
+      name,
+      admins: [adminId],
+      inspectors: [],
+      reviewers: [],
+      clients: [],
+    })
+    return teamFromRecord(rec)
+  },
+
+  /** Guarda las listas de roles del equipo. Solo un admin lo logra (regla del servidor). */
+  async saveTeamRoles(team: Team): Promise<Team> {
+    const rec = await pb.collection('teams').update(team.id, {
+      name: team.name,
+      admins: team.admins,
+      inspectors: team.inspectors,
+      reviewers: team.reviewers,
+      clients: team.clients,
+    })
+    return teamFromRecord(rec)
+  },
+
+  /**
+   * Busca un usuario por email para invitarlo. Devuelve `null` si no existe:
+   * la app NO crea cuentas — se crean en el panel de PocketBase (`/_/`).
+   */
+  async findUserByEmail(email: string): Promise<RemoteUser | null> {
+    try {
+      const rec = await pb
+        .collection('users')
+        .getFirstListItem(`email = ${JSON.stringify(email)}`, { requestKey: null })
+      const r = rec as unknown as { email?: string; name?: string }
+      return { id: rec.id, email: r.email || email, name: r.name || undefined }
+    } catch {
+      return null
+    }
+  },
+
+  /**
+   * Resuelve nombre/email de varios usuarios (para listar los miembros).
+   * PocketBase oculta el email de otros usuarios salvo que ellos activen
+   * `emailVisibility`, así que lo normal es recibir solo el nombre.
+   */
+  async usersByIds(ids: string[]): Promise<RemoteUser[]> {
+    if (!ids.length) return []
+    const filter = ids.map((id) => `id = ${JSON.stringify(id)}`).join(' || ')
+    const recs = await pb.collection('users').getFullList({ filter, requestKey: null })
+    return recs.map((rec) => {
+      const r = rec as unknown as { email?: string; name?: string }
+      return { id: rec.id, email: r.email || '', name: r.name || undefined }
+    })
+  },
+
   // ── CRUD genérico (base del motor de sync) ──────────────────
 
-  /** Trae registros remotos, opcionalmente los modificados desde `since` (ISO). */
-  async pull(col: RemoteCollection, since?: string): Promise<Record<string, unknown>[]> {
-    const opts: { sort: string; filter?: string } = { sort: '-updated' }
+  /** Trae registros remotos, opcionalmente los modificados desde `since` (ISO).
+   *  `expand` sirve para traer el autor y poder mostrar su nombre sin conexión. */
+  async pull(
+    col: RemoteCollection,
+    since?: string,
+    expand?: string,
+  ): Promise<Record<string, unknown>[]> {
+    const opts: { sort: string; filter?: string; expand?: string } = { sort: '-updated' }
     if (since) opts.filter = `updated >= "${since}"`
+    if (expand) opts.expand = expand
     return pb.collection(col).getFullList(opts)
   },
 

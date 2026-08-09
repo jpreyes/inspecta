@@ -41,9 +41,26 @@ El cliente PocketBase apunta a `'/'` (mismo origen). En dev eso se resuelve vía
 proxy de Vite; en prod, al servirse desde `pb_public/`, `/api` ya ES PocketBase.
 El código de la app **no tiene URLs ni claves de backend** — nada que cambiar al mover.
 
+## Usuarios y equipos
+
+Las cuentas **no se crean desde la app** (el auto-registro está cerrado a propósito).
+Crea la primera desde el panel `/_/`, o por CLI:
+
+```bash
+./pocketbase superuser upsert TU_EMAIL TU_CLAVE     # superusuario del panel
+```
+
+Los usuarios de la app se crean en `/_/` → colección `users`. Después, dentro de
+Inspecta: **Equipo → Nuevo equipo** (quien lo crea queda como administrador) y
+**invitar por email** a usuarios que ya existan, asignándoles rol.
+
+Las migraciones de `pb_migrations/` se aplican solas al arrancar; cópialas junto al
+binario en el VPS.
+
 ## Pendiente
 
-- Migración de colecciones PocketBase (projects, structures, inspections,
-  findings + campo `photos` con thumbnails, tests) con reglas por dueño.
-- Motor de sync push/pull (Dexie ↔ PocketBase) + subida de fotos como archivo.
-  Se cablea y prueba contra un PocketBase real (local o del VPS).
+- Motor de sync push/pull (Dexie ↔ PocketBase) + subida de fotos como archivo:
+  implementado, falta probarlo contra un PocketBase con datos reales y varios
+  usuarios concurrentes (la estrategia actual es "última escritura gana").
+- El sync empuja **todo** lo local en cada corrida; con volumen conviene filtrar por
+  `updated` y por equipo activo.
