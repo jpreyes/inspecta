@@ -34,3 +34,4 @@ pocketbase/pocketbase.exe
 *.sln
 *.sw?
 *.xlsx
+deploy/credentials.env
