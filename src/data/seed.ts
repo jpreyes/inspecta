@@ -231,3 +231,21 @@ export const seedFindings: Finding[] = [
     createdAt: '2025-05-05T10:20:00Z',
   },
 ]
+
+// ── Marca de "dato de demostración" ──────────────────────────
+// Los ids de arriba son fijos, así que son los MISMOS en el dispositivo de cada
+// usuario. Subirlos al servidor no solo lo ensucia: el segundo usuario que
+// sincronizara chocaría contra un id ya tomado por el primero. El motor de sync
+// los reconoce por esta lista y no los envía nunca (ver src/sync/engine.ts).
+export const DEMO_IDS: ReadonlySet<string> = new Set<string>([
+  ...seedProjects.map((p) => p.id),
+  ...seedStructures.map((s) => s.id),
+  ...seedInspections.map((i) => i.id),
+  ...seedFindings.map((f) => f.id),
+  ...seedTests.map((t) => t.id),
+])
+
+/** ¿Este registro viene de la siembra demo (y por lo tanto es solo local)? */
+export function isDemoRecord(id: string): boolean {
+  return DEMO_IDS.has(id)
+}
