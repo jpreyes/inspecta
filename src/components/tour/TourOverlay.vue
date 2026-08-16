@@ -22,15 +22,19 @@ interface Box {
   height: number
 }
 const box = ref<Box | null>(null)
-const vw = ref(window.innerWidth)
-const vh = ref(window.innerHeight)
+// Ancho/alto ÚTILES de la página. Se usa `clientWidth` y no `innerWidth`: si
+// algún elemento desborda, el navegador móvil ensancha el viewport visual y
+// `innerWidth` devuelve ese ancho inflado — con eso la tarjeta se ubicaba
+// fuera de la pantalla en tablet vertical.
+const vw = ref(document.documentElement.clientWidth || window.innerWidth)
+const vh = ref(document.documentElement.clientHeight || window.innerHeight)
 const clearing = ref(false)
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 function measure() {
-  vw.value = window.innerWidth
-  vh.value = window.innerHeight
+  vw.value = document.documentElement.clientWidth || window.innerWidth
+  vh.value = document.documentElement.clientHeight || window.innerHeight
   const sel = step.value.target
   const el = sel ? (document.querySelector(sel) as HTMLElement | null) : null
   if (!el) {
@@ -109,10 +113,22 @@ const cardStyle = computed(() => {
   }
   if (!r) return centered
 
+  // Pantalla chica: hoja pegada arriba o abajo, en el hueco que deje libre el
+  // objetivo, y con su alto limitado a ese hueco para no taparlo. Si el
+  // objetivo ocupa casi toda la pantalla (el cajón lateral abierto, por
+  // ejemplo) no hay hueco posible y la hoja se superpone abajo.
   if (vw.value < 640) {
-    const targetLow = r.top + r.height / 2 > vh.value / 2
-    const sheet = { left: '12px', right: '12px', width: 'auto', maxHeight: '55vh' }
-    return targetLow ? { ...sheet, top: '12px' } : { ...sheet, bottom: '12px' }
+    const sheet = { left: '12px', right: '12px', width: 'auto' }
+    const below = vh.value - (r.top + r.height)
+    const above = r.top
+    const MIN = 160
+    if (below >= above && below >= MIN) {
+      return { ...sheet, bottom: '12px', maxHeight: below - 24 + 'px' }
+    }
+    if (above > below && above >= MIN) {
+      return { ...sheet, top: '12px', maxHeight: above - 24 + 'px' }
+    }
+    return { ...sheet, bottom: '12px', maxHeight: '45vh' }
   }
 
   const clampLeft = (l: number) =>
@@ -145,6 +161,24 @@ const cardStyle = computed(() => {
       top: top + 'px',
       maxHeight: vh.value - top - 12 + 'px',
     }
+  }
+  // Ni arriba, ni abajo, ni al costado con holgura: antes de tapar el objetivo
+  // se aprovecha el hueco más grande, con la tarjeta desplazándose por dentro.
+  const APRETADO = 180
+  if (Math.max(below, above) >= APRETADO) {
+    return below >= above
+      ? {
+          width: width + 'px',
+          left: clampLeft(r.left),
+          top: r.top + r.height + 12 + 'px',
+          maxHeight: below - 24 + 'px',
+        }
+      : {
+          width: width + 'px',
+          left: clampLeft(r.left),
+          bottom: vh.value - r.top + 12 + 'px',
+          maxHeight: above - 24 + 'px',
+        }
   }
   return centered
 })

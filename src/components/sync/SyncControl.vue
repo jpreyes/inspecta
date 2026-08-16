@@ -40,7 +40,7 @@ function fmt(iso: string) {
     >
       <RefreshCw v-if="syncing" :size="14" class="animate-spin text-brand-500" />
       <Cloud v-else :size="14" />
-      <span>Sincronización</span>
+      <span class="hidden lg:inline">Sincronización</span>
     </button>
 
     <div

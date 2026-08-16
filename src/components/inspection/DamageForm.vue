@@ -125,7 +125,8 @@ async function submit() {
 }
 
 const selectCls = 'w-full rounded-md border border-ink-700 bg-ink-800 px-2 py-2 text-sm text-ink-100'
-const textCls = 'mt-1.5 w-full rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-sm text-ink-100'
+const textCls =
+  'mt-1.5 min-h-9 w-full rounded-md border border-ink-700 bg-ink-800 px-2 py-2 text-sm text-ink-100'
 </script>
 
 <template>
@@ -139,7 +140,14 @@ const textCls = 'mt-1.5 w-full rounded-md border border-ink-700 bg-ink-800 px-2 
             <span v-if="linkedElement" class="text-brand-500">· elemento {{ linkedElement.tag }}</span>
           </p>
         </div>
-        <button class="text-ink-500 hover:text-ink-200" aria-label="Cerrar" @click="store.closeDamageForm()"><X :size="18" /></button>
+        <!-- El área tocable va más allá del ícono: 18px son incómodos con el dedo. -->
+        <button
+          class="-m-2 flex h-9 w-9 items-center justify-center text-ink-500 hover:text-ink-200"
+          aria-label="Cerrar"
+          @click="store.closeDamageForm()"
+        >
+          <X :size="18" />
+        </button>
       </div>
 
       <form class="space-y-3 p-4" @submit.prevent="submit">
@@ -212,7 +220,7 @@ const textCls = 'mt-1.5 w-full rounded-md border border-ink-700 bg-ink-800 px-2 
               v-for="s in severities"
               :key="s"
               type="button"
-              class="flex-1 rounded-md border py-1.5 text-xs font-medium"
+              class="min-h-9 flex-1 rounded-md border py-2 text-xs font-medium"
               :style="
                 form.severity === s
                   ? { background: SEVERITY[s].color, borderColor: SEVERITY[s].color, color: '#0b1220' }
@@ -227,16 +235,16 @@ const textCls = 'mt-1.5 w-full rounded-md border border-ink-700 bg-ink-800 px-2 
 
         <div>
           <label class="mb-1 block text-[11px] text-ink-400">Extensión: {{ form.extension }}%</label>
-          <input v-model.number="form.extension" type="range" min="0" max="100" class="w-full accent-brand-500" />
+          <input v-model.number="form.extension" type="range" min="0" max="100" class="h-9 w-full accent-brand-500" />
         </div>
 
         <div>
           <label class="mb-1 block text-[11px] text-ink-400">Observaciones</label>
-          <textarea v-model="form.notes" rows="2" class="w-full rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-sm text-ink-200" placeholder="Descripción, medidas, recomendaciones…" />
+          <textarea v-model="form.notes" rows="2" class="w-full rounded-md border border-ink-700 bg-ink-800 px-2 py-2 text-sm text-ink-200" placeholder="Descripción, medidas, recomendaciones…" />
         </div>
 
         <div>
-          <label class="mb-1 flex w-fit cursor-pointer items-center gap-1.5 text-[11px] text-brand-500 hover:text-brand-400">
+          <label class="mb-1 flex min-h-9 w-fit cursor-pointer items-center gap-1.5 py-1.5 text-[11px] text-brand-500 hover:text-brand-400">
             <Camera :size="14" /> Agregar foto
             <input type="file" accept="image/*" capture="environment" multiple class="hidden" @change="onPhoto" />
           </label>

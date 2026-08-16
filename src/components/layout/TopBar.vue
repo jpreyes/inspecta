@@ -67,14 +67,14 @@ const conditionColor = computed(() => CONDITION[conditionFromScore(structureCond
       </button>
     </div>
 
-    <div class="flex items-center gap-3 sm:gap-4">
-      <div v-if="activeStructure" class="hidden text-right md:block">
+    <div class="flex items-center gap-2 lg:gap-3">
+      <div v-if="activeStructure" class="hidden text-right xl:block">
         <div class="max-w-[16rem] truncate text-xs text-ink-400">{{ activeStructure.name }}</div>
         <div class="text-[11px] text-ink-500">Estado al {{ asOfDate || '—' }}</div>
       </div>
       <div v-if="activeStructure" class="flex items-center gap-2">
-        <span class="hidden text-xs text-ink-400 sm:inline">Condición</span>
-        <div class="hidden h-2 w-24 overflow-hidden rounded-full bg-ink-800 sm:block">
+        <span class="hidden text-xs text-ink-400 lg:inline">Condición</span>
+        <div class="hidden h-2 w-24 overflow-hidden rounded-full bg-ink-800 lg:block">
           <div
             class="h-full rounded-full transition-all"
             :style="{ width: structureCondition + '%', background: conditionColor }"
@@ -91,7 +91,7 @@ const conditionColor = computed(() => CONDITION[conditionFromScore(structureCond
         @click="store.startTour()"
       >
         <Compass :size="14" class="text-brand-500" />
-        <span class="hidden sm:inline">Guía</span>
+        <span class="hidden lg:inline">Guía</span>
       </button>
       <TeamPanel />
       <SyncControl />

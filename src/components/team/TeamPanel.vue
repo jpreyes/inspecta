@@ -80,7 +80,7 @@ function display(m: { userId: string; name?: string; email?: string }) {
       @click="open = !open"
     >
       <Users :size="14" :style="{ color: roleColor }" />
-      <span class="hidden max-w-[9rem] truncate sm:inline">
+      <span class="hidden max-w-[9rem] truncate lg:inline">
         {{ activeTeam ? activeTeam.name : 'Equipo' }}
       </span>
     </button>
