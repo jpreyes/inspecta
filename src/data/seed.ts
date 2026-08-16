@@ -3,6 +3,10 @@ import { generateFrame } from './generate'
 
 // IDs de 15 caracteres [a-z0-9] → compatibles con los record ids de PocketBase,
 // para que el mismo id sirva local (Dexie) y remoto (sync) sin remapear.
+//
+// Los nombres llevan la marca "ejemplo" a propósito: esta siembra convive en el
+// menú lateral con los encargos reales que bajan del servidor, y sin la marca
+// se confunden. Nunca se sincroniza (ver DEMO_IDS al final del archivo).
 const PRJ = 'prjdemoaulario1'
 const STR = 'strdemobloquea1'
 const INSP1 = 'inspdemomarzo01'
@@ -15,7 +19,7 @@ const INSP3 = 'inspdemopuen001'
 export const seedProjects: Project[] = [
   {
     id: PRJ,
-    name: 'Edificio Aulario UACh',
+    name: 'Ejemplo · Edificio Aulario UACh',
     client: 'Universidad Austral de Chile',
     location: { lat: -39.8142, lng: -73.2459, address: 'Isla Teja, Valdivia' },
     createdAt: '2025-01-15T12:00:00Z',
@@ -38,7 +42,7 @@ export const seedStructures: Structure[] = [
   {
     id: STR,
     projectId: PRJ,
-    name: 'Bloque A · Pórtico principal',
+    name: 'Bloque A · Pórtico principal (ejemplo)',
     type: 'edificio',
     grid,
     elements: generateFrame(grid),
@@ -47,7 +51,7 @@ export const seedStructures: Structure[] = [
     // Sin `grid` → sin modelo 3D. Se inspecciona por lista/jerarquía.
     id: STR2,
     projectId: PRJ,
-    name: 'Puente Río Cruces (sin modelo 3D)',
+    name: 'Puente Río Cruces (ejemplo, sin modelo 3D)',
     type: 'puente',
     elements: bridgeElements,
   },

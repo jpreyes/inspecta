@@ -35,16 +35,18 @@ export const TOUR_STEPS: TourStep[] = [
     bullets: [
       'Todo se guarda primero en este dispositivo: la app funciona completa sin señal.',
       'Al volver a tener conexión, sincronizas y tu trabajo sube al servidor.',
+      'Los proyectos son del equipo, no del teléfono: por eso hay que entrar con tu cuenta para verlos.',
     ],
   },
   {
     id: 'conectar',
-    title: 'Conectar y sincronizar',
+    title: 'Sincronizar',
     body:
-      'Acá entras con tu email y tu clave. “Sincronizar ahora” hace las dos direcciones: baja los encargos que te asignaron y sube los daños, fotos y ensayos que registraste en terreno.',
+      '“Sincronizar ahora” hace las dos direcciones: baja los encargos que te asignaron y sube los daños, fotos y ensayos que registraste en terreno. La primera sincronización es la que trae tu estructura al dispositivo.',
     bullets: [
       'Sin conexión el botón no hace falta: sigue trabajando y sincroniza después.',
-      'La primera sincronización es la que trae la estructura CIC Máfil a tu dispositivo.',
+      'Tu sesión se revalida sola cada vez que hay internet, y aguanta hasta 14 días sin validar.',
+      'Cerrar sesión oculta todos los datos y exige conexión para volver a entrar: sincroniza antes.',
     ],
     target: '[data-tour="sync"]',
   },
@@ -67,7 +69,7 @@ export const TOUR_STEPS: TourStep[] = [
       'El menú lateral ordena el trabajo: proyecto ▸ estructura. Haz clic en una estructura para dejarla activa; todo lo demás (campañas, daños, resultados) se refiere a ella.',
     bullets: [
       'CIC Máfil es el encargo real y llega desde el servidor.',
-      'El Aulario UACh y el Puente Río Cruces son datos de demostración de este dispositivo: sirven para practicar y no se suben a ninguna parte.',
+      'Lo que dice “ejemplo” en el nombre es material de práctica de este dispositivo: no se sube a ninguna parte y se puede borrar desde el último paso de esta guía.',
     ],
     target: '[data-tour="sidebar"]',
     openSidebar: true,
@@ -157,8 +159,11 @@ export const TOUR_STEPS: TourStep[] = [
     id: 'terreno',
     title: 'En terreno',
     body:
-      'Sal a terreno sin preocuparte de la señal: la app abre, registra y guarda igual sin conexión. Al volver a cobertura, entra acá y sincroniza para que tu trabajo quede en el servidor y el resto del equipo lo vea.',
-    bullets: ['Puedes volver a abrir esta guía cuando quieras, con el botón “Guía”.'],
+      'Sal a terreno sin preocuparte de la señal: la app abre, registra y guarda igual sin conexión mientras tu sesión siga vigente. Al volver a cobertura, entra acá y sincroniza para que tu trabajo quede en el servidor y el resto del equipo lo vea.',
+    bullets: [
+      'Puedes volver a abrir esta guía cuando quieras, con el botón “Guía”.',
+      'Si pasan más de 14 días sin conectarte, la app te va a pedir internet para validar la sesión.',
+    ],
     target: '[data-tour="sync"]',
     // Termina donde empieza el trabajo: la lista de daños de la campaña.
     view: 'list',

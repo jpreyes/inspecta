@@ -85,6 +85,65 @@ export const useInspectionStore = defineStore('inspection', () => {
   const lastSyncAt = ref<string | null>(null)
   const syncMessage = ref('')
 
+  // ── Sesión obligatoria ─────────────────────────────────
+  // Los proyectos son del servidor, no del dispositivo: sin sesión no se
+  // muestra ningún dato. La primera entrada necesita internet; después la
+  // sesión sirve sin señal hasta GRACE_DAYS desde la última validación
+  // exitosa contra el servidor (con conexión se revalida sola al arrancar,
+  // así una cuenta revocada deja de entrar).
+  const GRACE_DAYS = 14
+  const VERIFIED_KEY = 'inspecta.verified' // última validación contra el servidor
+  const OWNER_KEY = 'inspecta.owner' // dueño de los datos locales
+  /** Por qué se pide iniciar sesión (se muestra en la pantalla de entrada). */
+  const sessionMessage = ref('')
+
+  function stampVerified() {
+    localStorage.setItem(VERIFIED_KEY, new Date().toISOString())
+  }
+  /** Días desde la última validación, o null si nunca se validó. */
+  function verifiedAgeDays(): number | null {
+    const iso = localStorage.getItem(VERIFIED_KEY)
+    if (!iso) return null
+    const ms = Date.now() - new Date(iso).getTime()
+    return Number.isFinite(ms) ? ms / 86_400_000 : null
+  }
+  function dropSession(reason: string) {
+    backend.logout()
+    authUser.value = null
+    teams.value = []
+    userNames.value = {}
+    localStorage.removeItem(VERIFIED_KEY)
+    sessionMessage.value = reason
+  }
+
+  /** ¿Hay sesión utilizable? Revalida contra el servidor si hay conexión. */
+  async function validateSession(): Promise<boolean> {
+    if (!backend.isAuthenticated) {
+      authUser.value = null
+      return false
+    }
+    if (await backend.isReachable()) {
+      try {
+        authUser.value = await backend.refresh()
+        stampVerified()
+        return true
+      } catch {
+        dropSession('Tu sesión ya no es válida. Vuelve a entrar con tu clave.')
+        return false
+      }
+    }
+    // Sin conexión: vale la sesión guardada mientras no esté vencida.
+    const age = verifiedAgeDays()
+    if (age === null || age > GRACE_DAYS) {
+      dropSession(
+        `Llevas más de ${GRACE_DAYS} días sin validar la sesión. Conéctate a internet para entrar de nuevo.`,
+      )
+      return false
+    }
+    authUser.value = backend.user
+    return true
+  }
+
   // ── Guía guiada (tour) ─────────────────────────────────
   // Se abre sola la primera vez que se usa la app en este dispositivo, y queda
   // disponible en el botón "Guía". La marca vive en localStorage: es una
@@ -196,19 +255,46 @@ export const useInspectionStore = defineStore('inspection', () => {
   }
 
   async function init() {
+    const ok = await validateSession()
+    ready.value = true
+    if (ok) await openWorkspace()
+  }
+
+  /**
+   * Abre el espacio de trabajo del usuario con sesión: sus datos locales, sus
+   * equipos y —la primera vez— la guía. Se llama al arrancar con sesión válida
+   * y después de iniciar sesión.
+   */
+  async function openWorkspace() {
+    // Cambio de cuenta en el mismo dispositivo: lo local es del otro usuario.
+    const prev = localStorage.getItem(OWNER_KEY)
+    if (prev && authUser.value && prev !== authUser.value.id) await wipeLocalData()
+    if (authUser.value) localStorage.setItem(OWNER_KEY, authUser.value.id)
+
     if (!localStorage.getItem(DEMO_KEY)) await seedIfEmpty()
     await reload()
     selectedStructureId.value = structures.value[0]?.id ?? null
     inspectionIndex.value = Math.max(0, structureInspections.value.length - 1)
-    ready.value = true
     // Primera vez en este dispositivo: se abre la guía.
     if (!localStorage.getItem(TOUR_KEY)) startTour()
-    // Con sesión guardada, recupera equipos y rol sin bloquear el arranque.
-    if (backend.isAuthenticated) {
-      loadTeams().catch(() => {
-        teamMessage.value = 'No se pudieron cargar los equipos (sin conexión).'
-      })
-    }
+    loadTeams().catch(() => {
+      teamMessage.value = 'No se pudieron cargar los equipos (sin conexión).'
+    })
+  }
+
+  /** Borra los datos locales (al entrar otra cuenta en el mismo dispositivo). */
+  async function wipeLocalData() {
+    await Promise.all([
+      db.findings.clear(),
+      db.tests.clear(),
+      db.inspections.clear(),
+      db.structures.clear(),
+      db.projects.clear(),
+    ])
+    localStorage.removeItem(DEMO_KEY)
+    selectTeam(null)
+    selectedStructureId.value = null
+    selectedElementId.value = null
   }
 
   // ── Getters ────────────────────────────────────────────
@@ -378,14 +464,15 @@ export const useInspectionStore = defineStore('inspection', () => {
   // ── Auth + sync ────────────────────────────────────────
   async function login(email: string, password: string) {
     authUser.value = await backend.login(email, password)
-    await loadTeams()
+    stampVerified()
+    sessionMessage.value = ''
+    await openWorkspace()
     return authUser.value
   }
+  /** Cierra sesión. Los datos locales quedan, pero no se ven sin sesión; para
+   *  volver a entrar hace falta conexión (la clave la valida el servidor). */
   function logout() {
-    backend.logout()
-    authUser.value = null
-    teams.value = []
-    userNames.value = {}
+    dropSession('')
     // No se limpia activeTeamId: al volver a entrar se reencuentra el equipo.
   }
 
@@ -810,6 +897,7 @@ export const useInspectionStore = defineStore('inspection', () => {
     teamMessage,
     tourOpen,
     tourStep,
+    sessionMessage,
     // getters
     activeStructure,
     activeProject,
@@ -839,6 +927,7 @@ export const useInspectionStore = defineStore('inspection', () => {
     canWorkHere,
     hasDemoData,
     // acciones
+    validateSession,
     startTour,
     closeTour,
     tourNext,

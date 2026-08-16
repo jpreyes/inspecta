@@ -82,9 +82,22 @@ estado *a esa fecha* → permite comparar la **evolución entre inspecciones**.
   evolución por campaña, riesgo/vulnerabilidad/sitio, hallazgos priorizados y ensayos.
 - **Informe Word (.docx)** generado en el cliente (`src/report/docx.ts`).
 
+### Sesión obligatoria (y offline dentro de un plazo)
+Los proyectos son del equipo y viven en el servidor, no en el dispositivo: **sin sesión
+la app no muestra ningún dato**, solo la pantalla de entrada (`src/components/auth/`).
+La primera entrada necesita internet, porque la clave la valida el servidor.
+
+Después la sesión sirve **sin señal**: al arrancar, si hay conexión se revalida sola
+contra PocketBase (`authRefresh`) —así una cuenta revocada deja de entrar— y si no la
+hay, vale mientras la última validación exitosa tenga menos de **14 días**
+(`GRACE_DAYS` en `src/stores/inspection.ts`); pasado ese plazo pide internet. Cerrar
+sesión oculta todo y exige conexión para volver, así que conviene sincronizar antes;
+la app lo advierte. Si entra otra cuenta en el mismo dispositivo, los datos locales del
+anterior se borran (son de otra persona).
+
 ### Offline-first + sync opcional (PocketBase)
-Todo vive en IndexedDB; la app funciona 100% sin señal. El backend PocketBase es una
-capa opcional de sync/compartir. La web habla siempre al mismo origen `/api`, así que
+Todo vive en IndexedDB; la app funciona 100% sin señal mientras la sesión esté vigente.
+El backend PocketBase es la fuente de los datos y la capa de sync/compartir. La web habla siempre al mismo origen `/api`, así que
 servir `dist/` desde `pb_public/` no requiere cambios de código. Ver `DEPLOY.md`.
 
 El push **filtra por permiso antes de enviar** (`src/sync/engine.ts`): el pull baja los
@@ -102,10 +115,18 @@ sola la primera vez en cada dispositivo (marca en `localStorage`) y se reabre co
 botón **Guía** de la barra superior. El elemento iluminado **sigue siendo clickeable**:
 se puede probar lo que se está explicando sin salir de la guía.
 
-El último paso ofrece **borrar los datos de demostración** del dispositivo. Esa siembra
-(`src/data/seed.ts`) tiene ids fijos, así que es la misma en todos los dispositivos:
-por eso el motor de sync no la sube nunca —el segundo usuario chocaría contra ids ya
-tomados por el primero— y por eso, una vez borrada, no se vuelve a sembrar.
+El último paso ofrece **borrar los datos de ejemplo** del dispositivo. Esa siembra
+(`src/data/seed.ts`) se instala al iniciar sesión, lleva la palabra "ejemplo" en el
+nombre —convive en el árbol con los encargos reales y sin la marca se confunden— y
+tiene ids fijos, así que es la misma en todos los dispositivos: por eso el motor de
+sync no la sube nunca (el segundo usuario chocaría contra ids ya tomados por el
+primero) y por eso, una vez borrada, no se vuelve a sembrar.
+
+> **Ojo al desplegar:** la app es una PWA con `registerType: 'autoUpdate'`. El
+> service worker sirve el bundle cacheado hasta que la siguiente visita instala el
+> nuevo, así que tras publicar hay que **recargar** para tomar los cambios — un cliente
+> viejo sigue comportándose como antes (nos pasó: un navegador con la versión previa
+> subió al servidor la siembra de ejemplo que la nueva ya no sube).
 
 ### Equipos, roles y trazabilidad
 `src/types/team.ts`. Un **equipo** agrupa proyectos, estructuras y campañas, y tiene

@@ -62,6 +62,19 @@ export const backend = {
     const r = auth.record as { email?: string; name?: string }
     return { id: auth.record.id, email: r.email ?? email, name: r.name || undefined }
   },
+
+  /**
+   * Revalida la sesión guardada contra el servidor y renueva el token.
+   * Lanza si el token venció o la cuenta ya no existe/está deshabilitada —
+   * que es justamente lo que hay que detectar para no dejar a alguien dentro
+   * con una cuenta que ya se le quitó. Sin conexión también lanza, así que
+   * quien llama decide si acepta la sesión por antigüedad.
+   */
+  async refresh(): Promise<RemoteUser> {
+    const auth = await pb.collection('users').authRefresh({ requestKey: null })
+    const r = auth.record as { email?: string; name?: string }
+    return { id: auth.record.id, email: r.email ?? '', name: r.name || undefined }
+  },
   logout(): void {
     pb.authStore.clear()
   },

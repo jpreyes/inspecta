@@ -221,7 +221,7 @@ async function clearDemo() {
         @click="clearDemo"
       >
         <Eraser :size="12" />
-        {{ clearing ? 'Borrando…' : 'Borrar los datos de demostración de este dispositivo' }}
+        {{ clearing ? 'Borrando…' : 'Borrar los datos de ejemplo de este dispositivo' }}
       </button>
 
       <div class="mt-4 flex items-center justify-between gap-2">

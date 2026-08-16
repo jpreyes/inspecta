@@ -12,9 +12,10 @@ import ResultsView from './components/results/ResultsView.vue'
 import DamageListView from './components/list/DamageListView.vue'
 import DamageForm from './components/inspection/DamageForm.vue'
 import TourOverlay from './components/tour/TourOverlay.vue'
+import LoginView from './components/auth/LoginView.vue'
 
 const store = useInspectionStore()
-const { ready, activeView, damageFormOpen, sidebarOpen, activeStructure, tourOpen } =
+const { ready, activeView, damageFormOpen, sidebarOpen, activeStructure, tourOpen, authUser } =
   storeToRefs(store)
 
 onMounted(() => store.init())
@@ -22,9 +23,12 @@ onMounted(() => store.init())
 
 <template>
   <div class="flex h-full flex-col bg-ink-950 text-ink-300">
-    <TopBar />
+    <TopBar v-if="authUser" />
 
-    <div v-if="ready" class="relative flex min-h-0 flex-1">
+    <!-- Sin sesión no se muestra ningún dato: los proyectos son del servidor. -->
+    <LoginView v-if="ready && !authUser" />
+
+    <div v-else-if="ready" class="relative flex min-h-0 flex-1">
       <!-- Backdrop del drawer (solo móvil/tablet) -->
       <div
         v-if="sidebarOpen"
@@ -78,14 +82,14 @@ onMounted(() => store.init())
     </div>
 
     <div v-else class="flex flex-1 items-center justify-center text-ink-400">
-      Cargando base offline…
+      Comprobando tu sesión…
     </div>
 
     <!-- Formulario "daño primero" (global, sobre cualquier vista) -->
     <DamageForm v-if="damageFormOpen" />
 
     <!-- Guía de la plataforma: se abre sola la primera vez -->
-    <TourOverlay v-if="ready && tourOpen" />
+    <TourOverlay v-if="ready && authUser && tourOpen" />
   </div>
 </template>
 
