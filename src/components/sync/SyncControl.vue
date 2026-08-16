@@ -36,6 +36,7 @@ function fmt(iso: string) {
 <template>
   <div class="relative">
     <button
+      data-tour="sync"
       class="flex items-center gap-1.5 rounded-md border border-ink-700 px-2.5 py-1 text-xs transition-colors"
       :class="authUser ? 'text-ink-200 hover:bg-ink-800' : 'text-ink-400 hover:bg-ink-800'"
       @click="open = !open"

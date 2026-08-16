@@ -75,7 +75,9 @@ estado *a esa fecha* → permite comparar la **evolución entre inspecciones**.
 
 ### CRUD y datos
 - Proyectos y estructuras (crear/editar/eliminar en el sidebar, borrado en cascada).
-- Inspecciones y ensayos (esclerometría, carbonatación…).
+- Inspecciones y ensayos (esclerometría, carbonatación…), con **atajos de ensayos
+  frecuentes** (`src/data/tests.ts`) que rellenan método y norma para que el inspector
+  solo escriba laboratorio, muestra y resultado.
 - Vista de **Resultados** "de una sola mirada": KPIs, distribución por severidad,
   evolución por campaña, riesgo/vulnerabilidad/sitio, hallazgos priorizados y ensayos.
 - **Informe Word (.docx)** generado en el cliente (`src/report/docx.ts`).
@@ -84,6 +86,26 @@ estado *a esa fecha* → permite comparar la **evolución entre inspecciones**.
 Todo vive en IndexedDB; la app funciona 100% sin señal. El backend PocketBase es una
 capa opcional de sync/compartir. La web habla siempre al mismo origen `/api`, así que
 servir `dist/` desde `pb_public/` no requiere cambios de código. Ver `DEPLOY.md`.
+
+El push **filtra por permiso antes de enviar** (`src/sync/engine.ts`): el pull baja los
+proyectos y estructuras del equipo, que un inspector no puede escribir, y devolverlos
+sin filtro terminaba en 404 — un error que tumbaba la corrida entera y le dejaba la
+sincronización servible una sola vez. Hoy se omiten en silencio (se informan como
+"Omitidos N") y ningún registro rechazado interrumpe al resto.
+
+### Guía guiada de la plataforma
+`src/data/tour.ts` + `src/components/tour/TourOverlay.vue`. Trece pasos que iluminan
+elementos reales de la interfaz (`data-tour="…"`) y llevan la app a la vista donde ese
+elemento existe: conectarse → equipo y rol → estructuras → campañas → registrar daños →
+tabla → condición → vulnerabilidad y sitio → ensayos → informe → sincronizar. Se abre
+sola la primera vez en cada dispositivo (marca en `localStorage`) y se reabre con el
+botón **Guía** de la barra superior. El elemento iluminado **sigue siendo clickeable**:
+se puede probar lo que se está explicando sin salir de la guía.
+
+El último paso ofrece **borrar los datos de demostración** del dispositivo. Esa siembra
+(`src/data/seed.ts`) tiene ids fijos, así que es la misma en todos los dispositivos:
+por eso el motor de sync no la sube nunca —el segundo usuario chocaría contra ids ya
+tomados por el primero— y por eso, una vez borrada, no se vuelve a sembrar.
 
 ### Equipos, roles y trazabilidad
 `src/types/team.ts`. Un **equipo** agrupa proyectos, estructuras y campañas, y tiene
@@ -102,6 +124,18 @@ en PocketBase las condiciones sobre una relación multi-valor se evalúan de for
 independiente entre filas, así que "la misma membresía tiene este usuario Y este rol"
 no es expresable de forma confiable en una regla. Con listas por rol, cada regla mira
 un solo campo y la autorización real la impone el servidor, no la interfaz.
+
+**Dos trampas de PocketBase con estas listas** (ambas costaron caro, ver
+`pb_migrations/1721000400`–`402`): una relación es múltiple solo si `maxSelect > 1`
+—`maxSelect: 0` **no** significa "sin límite", deja el campo en un solo registro—, y
+sobre una relación múltiple la regla tiene que decir contra qué compara:
+`admins.id ?= @request.auth.id`. La forma corta `admins ?= @request.auth.id` funciona
+sobre una relación simple y devuelve **cero** sobre una múltiple, así que al corregir
+el campo las reglas dejan de calzar y el equipo se vuelve invisible para sus miembros
+— con el agravante de que el cliente, al no reconocer ningún rol, cae en "modo local"
+y ofrece permiso total en la interfaz contra un servidor que sí restringe.
+Los valores guardados sí los convierte PocketBase solo al ampliar el campo
+(comprobado: `'abc'` → `'["abc"]'`).
 
 **Asignación por estructura.** El rol define *qué* puede hacer alguien; la asignación
 define *dónde*. Cada estructura tiene su lista de inspectores (`structures.inspectors`),
@@ -136,7 +170,9 @@ src/
   data/vulnerability.ts     # irregularidades NCh433/ASCE 7 + riesgo
   data/hazard.ts            # amenaza sísmica NCh433
   data/generate.ts          # generador paramétrico del pórtico 3D
-  data/seed.ts              # datos demo
+  data/tests.ts             # atajos de ensayos frecuentes (tipo/método/norma)
+  data/tour.ts              # pasos de la guía guiada
+  data/seed.ts              # datos demo (ids fijos: nunca se sincronizan)
   db/index.ts               # Dexie / IndexedDB (offline)
   stores/inspection.ts      # store Pinia
   report/docx.ts            # informe Word
@@ -145,6 +181,7 @@ src/
   components/
     layout/{TopBar,Sidebar}.vue
     team/TeamPanel.vue        # equipo activo, miembros, invitar, roles
+    tour/TourOverlay.vue      # guía guiada (spotlight + tarjeta por paso)
     twin/TwinCanvas.vue
     list/DamageListView.vue
     results/{ResultsView,VulnerabilityPanel}.vue

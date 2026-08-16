@@ -15,6 +15,8 @@ import { generateFrame } from '../data/generate'
 import { registeredIrregularities, riskLevel } from '../data/vulnerability'
 import { hazardIndex, type SiteConfig } from '../data/hazard'
 import { db, seedIfEmpty } from '../db'
+import { isDemoRecord } from '../data/seed'
+import { TOUR_STEPS } from '../data/tour'
 import { backend, type RemoteUser } from '../sync/backend'
 import { syncNow as runSync } from '../sync/engine'
 import {
@@ -82,6 +84,32 @@ export const useInspectionStore = defineStore('inspection', () => {
   const syncing = ref(false)
   const lastSyncAt = ref<string | null>(null)
   const syncMessage = ref('')
+
+  // ── Guía guiada (tour) ─────────────────────────────────
+  // Se abre sola la primera vez que se usa la app en este dispositivo, y queda
+  // disponible en el botón "Guía". La marca vive en localStorage: es una
+  // preferencia del dispositivo, no un dato de la inspección.
+  const TOUR_KEY = 'inspecta.tour'
+  /** Marca de que ya se borró la siembra demo (para no volver a sembrarla). */
+  const DEMO_KEY = 'inspecta.demo'
+  const tourOpen = ref(false)
+  const tourStep = ref(0)
+
+  function startTour() {
+    tourStep.value = 0
+    tourOpen.value = true
+  }
+  function closeTour() {
+    tourOpen.value = false
+    localStorage.setItem(TOUR_KEY, 'done')
+  }
+  function tourNext() {
+    if (tourStep.value >= TOUR_STEPS.length - 1) closeTour()
+    else tourStep.value++
+  }
+  function tourPrev() {
+    if (tourStep.value > 0) tourStep.value--
+  }
 
   // ── Equipos y roles ────────────────────────────────────
   const teams = ref<Team[]>([])
@@ -168,11 +196,13 @@ export const useInspectionStore = defineStore('inspection', () => {
   }
 
   async function init() {
-    await seedIfEmpty()
+    if (!localStorage.getItem(DEMO_KEY)) await seedIfEmpty()
     await reload()
     selectedStructureId.value = structures.value[0]?.id ?? null
     inspectionIndex.value = Math.max(0, structureInspections.value.length - 1)
     ready.value = true
+    // Primera vez en este dispositivo: se abre la guía.
+    if (!localStorage.getItem(TOUR_KEY)) startTour()
     // Con sesión guardada, recupera equipos y rol sin bloquear el arranque.
     if (backend.isAuthenticated) {
       loadTeams().catch(() => {
@@ -472,7 +502,11 @@ export const useInspectionStore = defineStore('inspection', () => {
       }
       inspectionIndex.value = Math.min(inspectionIndex.value, Math.max(0, structureInspections.value.length - 1))
       lastSyncAt.value = new Date().toISOString()
-      syncMessage.value = `Enviados ${res.pushed} · Fotos ${res.photos} · Recibidos ${res.pulled}`
+      syncMessage.value =
+        `Enviados ${res.pushed} · Fotos ${res.photos} · Recibidos ${res.pulled}` +
+        // Omitidos = registros que tu rol no puede escribir en el servidor
+        // (proyectos y estructuras si eres inspector). No es un error.
+        (res.skipped ? ` · Omitidos ${res.skipped}` : '')
       return res
     } catch (e) {
       const err = e as { message?: string; status?: number; response?: { data?: unknown } }
@@ -567,6 +601,45 @@ export const useInspectionStore = defineStore('inspection', () => {
     if (!s) return
     s.site = { ...(s.site ?? {}), ...patch }
     await db.structures.put(plain(s))
+  }
+
+  // ── Datos de demostración ──────────────────────────────
+  /** ¿Quedan datos sembrados de demostración en este dispositivo? */
+  const hasDemoData = computed(
+    () => projects.value.some((p) => isDemoRecord(p.id)) || structures.value.some((s) => isDemoRecord(s.id)),
+  )
+
+  /**
+   * Borra la siembra de demostración y todo lo que cuelgue de ella. Es una
+   * limpieza LOCAL: esos registros nunca se suben al servidor (el motor de
+   * sync los reconoce por id), así que no hay nada que borrar del otro lado.
+   */
+  async function removeDemoData() {
+    // Deja constancia: si no, la siembra volvería sola en el próximo arranque
+    // cuando el dispositivo quede sin ningún proyecto.
+    localStorage.setItem(DEMO_KEY, 'cleared')
+    const demoProjects = new Set(projects.value.filter((p) => isDemoRecord(p.id)).map((p) => p.id))
+    const demoStructures = new Set(
+      structures.value.filter((s) => isDemoRecord(s.id) || demoProjects.has(s.projectId)).map((s) => s.id),
+    )
+    const demoInspections = new Set(
+      inspections.value.filter((i) => isDemoRecord(i.id) || demoStructures.has(i.structureId)).map((i) => i.id),
+    )
+    const dropFinding = (x: { id: string; inspectionId: string }) =>
+      isDemoRecord(x.id) || demoInspections.has(x.inspectionId)
+
+    await db.findings.bulkDelete(findings.value.filter(dropFinding).map((f) => f.id))
+    await db.tests.bulkDelete(tests.value.filter(dropFinding).map((t) => t.id))
+    await db.inspections.bulkDelete([...demoInspections])
+    await db.structures.bulkDelete([...demoStructures])
+    await db.projects.bulkDelete([...demoProjects])
+
+    await reload()
+    if (!structures.value.find((s) => s.id === selectedStructureId.value)) {
+      selectedStructureId.value = structures.value[0]?.id ?? null
+      selectedElementId.value = null
+    }
+    inspectionIndex.value = Math.max(0, structureInspections.value.length - 1)
   }
 
   // ── CRUD de proyectos ──────────────────────────────────
@@ -735,6 +808,8 @@ export const useInspectionStore = defineStore('inspection', () => {
     teams,
     activeTeamId,
     teamMessage,
+    tourOpen,
+    tourStep,
     // getters
     activeStructure,
     activeProject,
@@ -762,7 +837,13 @@ export const useInspectionStore = defineStore('inspection', () => {
     canManageTeam,
     canManageProjects,
     canWorkHere,
+    hasDemoData,
     // acciones
+    startTour,
+    closeTour,
+    tourNext,
+    tourPrev,
+    removeDemoData,
     can,
     canWorkOnStructure,
     assignInspectors,

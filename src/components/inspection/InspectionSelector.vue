@@ -88,7 +88,7 @@ function step(dir: number) {
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl rounded-xl border border-ink-800 bg-ink-900/85 p-3 backdrop-blur">
+  <div data-tour="campaigns" class="mx-auto max-w-3xl rounded-xl border border-ink-800 bg-ink-900/85 p-3 backdrop-blur">
     <div class="mb-2 flex items-center justify-between">
       <div class="flex items-center gap-2 text-xs text-ink-400">
         <CalendarDays :size="14" />

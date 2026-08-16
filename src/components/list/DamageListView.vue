@@ -51,6 +51,7 @@ function fmtStamp(iso?: string) {
         </div>
         <button
           v-if="canWorkHere"
+          data-tour="new-damage"
           class="flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-ink-950 hover:bg-brand-500"
           @click="store.openDamageForm()"
         >
@@ -62,7 +63,7 @@ function fmtStamp(iso?: string) {
     <InspectionSelector />
 
     <!-- Tabla de daños (estilo structapp) -->
-    <div v-if="currentFindings.length" class="overflow-x-auto rounded-xl border border-ink-800">
+    <div v-if="currentFindings.length" data-tour="damage-table" class="overflow-x-auto rounded-xl border border-ink-800">
       <table class="w-full text-sm">
         <thead class="bg-ink-900 text-left text-[11px] uppercase tracking-wide text-ink-500">
           <tr>
@@ -135,10 +136,11 @@ function fmtStamp(iso?: string) {
     </div>
 
     <!-- vacío -->
-    <div v-else class="rounded-xl border border-dashed border-ink-800 px-4 py-12 text-center">
+    <div v-else data-tour="damage-table" class="rounded-xl border border-dashed border-ink-800 px-4 py-12 text-center">
       <p class="text-sm text-ink-400">Sin daños registrados en esta campaña.</p>
       <button
         v-if="canWorkHere"
+        data-tour="new-damage-empty"
         class="mx-auto mt-3 flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-ink-950 hover:bg-brand-500"
         @click="store.openDamageForm()"
       >

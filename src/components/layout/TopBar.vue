@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useInspectionStore } from '../../stores/inspection'
 
-import { Box, ChartColumn, List, Menu } from 'lucide-vue-next'
+import { Box, ChartColumn, Compass, List, Menu } from 'lucide-vue-next'
 import SyncControl from '../sync/SyncControl.vue'
 import TeamPanel from '../team/TeamPanel.vue'
 import { CONDITION, conditionFromScore } from '../../types/inspection'
@@ -42,7 +42,7 @@ const conditionColor = computed(() => CONDITION[conditionFromScore(structureCond
     </div>
 
     <!-- toggle de vista central -->
-    <div class="flex rounded-lg border border-ink-800 bg-ink-950 p-0.5 text-xs">
+    <div data-tour="views" class="flex rounded-lg border border-ink-800 bg-ink-950 p-0.5 text-xs">
       <button
         class="flex items-center gap-1.5 rounded-md px-3 py-1 font-medium transition-colors"
         :class="activeView === 'list' ? 'bg-ink-800 text-ink-100' : 'text-ink-400 hover:text-ink-200'"
@@ -84,6 +84,15 @@ const conditionColor = computed(() => CONDITION[conditionFromScore(structureCond
           {{ structureCondition }}
         </span>
       </div>
+      <button
+        data-tour="guide"
+        class="flex items-center gap-1.5 rounded-md border border-ink-700 px-2.5 py-1 text-xs text-ink-300 transition-colors hover:bg-ink-800"
+        title="Guía de la plataforma"
+        @click="store.startTour()"
+      >
+        <Compass :size="14" class="text-brand-500" />
+        <span class="hidden sm:inline">Guía</span>
+      </button>
       <TeamPanel />
       <SyncControl />
     </div>

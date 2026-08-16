@@ -6,6 +6,7 @@ import { useInspectionStore } from '../../stores/inspection'
 import { iconForDamage } from '../../ui/icons'
 import { CONDITION, SEVERITY, findingIndex, findingPriority, type Severity } from '../../types/inspection'
 import VulnerabilityPanel from './VulnerabilityPanel.vue'
+import { TEST_PRESETS, type TestPreset } from '../../data/tests'
 
 const store = useInspectionStore()
 const {
@@ -79,10 +80,22 @@ const testDraft = reactive({
   sampleLocation: '',
   resultSummary: '',
 })
+/** Ejemplo de resultado del ensayo elegido (placeholder del campo). */
+const resultHint = ref('')
+
 function openNewTest() {
   Object.assign(testDraft, { testType: '', method: '', standard: '', laboratory: '', sampleLocation: '', resultSummary: '' })
   testDraft.executedAt = activeInspection.value?.date ?? new Date().toISOString().slice(0, 10)
+  resultHint.value = ''
   showNewTest.value = true
+}
+
+/** Atajo: rellena tipo, método y norma; el resto lo pone el inspector. */
+function applyPreset(p: TestPreset) {
+  testDraft.testType = p.testType
+  testDraft.method = p.method
+  testDraft.standard = p.standard === '—' ? '' : p.standard
+  resultHint.value = p.resultHint
 }
 async function createTest() {
   if (!testDraft.testType.trim() || !testDraft.resultSummary.trim()) return
@@ -141,6 +154,7 @@ async function generateDocx() {
       </div>
       <div class="flex shrink-0 items-center gap-2">
         <button
+          data-tour="report"
           class="flex items-center gap-1.5 rounded-lg border border-ink-700 px-3 py-2 text-sm text-ink-300 hover:bg-ink-800 disabled:opacity-50"
           :disabled="generating"
           @click="generateDocx"
@@ -158,7 +172,7 @@ async function generateDocx() {
     </header>
 
     <!-- KPIs -->
-    <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
+    <div data-tour="kpis" class="grid grid-cols-2 gap-3 md:grid-cols-5">
       <!-- condición global (semáforo) -->
       <div
         class="rounded-xl border p-4"
@@ -311,7 +325,7 @@ async function generateDocx() {
     </div>
 
     <!-- Ensayos -->
-    <div class="rounded-xl border border-ink-800 bg-ink-900">
+    <div data-tour="tests" class="rounded-xl border border-ink-800 bg-ink-900">
       <div class="flex items-center justify-between border-b border-ink-800 px-4 py-3">
         <h2 class="text-sm font-semibold text-ink-200">Ensayos</h2>
         <button
@@ -325,13 +339,31 @@ async function generateDocx() {
 
       <!-- formulario nuevo ensayo -->
       <form v-if="showNewTest" class="grid gap-2 border-b border-ink-800 p-4 sm:grid-cols-2" @submit.prevent="createTest">
+        <!-- Atajos de ensayos frecuentes -->
+        <div class="flex flex-wrap gap-1.5 sm:col-span-2">
+          <button
+            v-for="p in TEST_PRESETS"
+            :key="p.testType"
+            type="button"
+            class="rounded-full border px-2 py-0.5 text-[11px] transition-colors"
+            :class="
+              testDraft.testType === p.testType
+                ? 'border-brand-600 bg-brand-600/15 text-ink-100'
+                : 'border-ink-700 text-ink-400 hover:bg-ink-800'
+            "
+            :title="p.standard === '—' ? p.method : p.method + ' · ' + p.standard"
+            @click="applyPreset(p)"
+          >
+            {{ p.testType }}
+          </button>
+        </div>
         <input v-model="testDraft.testType" placeholder="Tipo (ej. Esclerometría)" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200" />
         <input v-model="testDraft.executedAt" type="date" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200" />
         <input v-model="testDraft.method" placeholder="Método" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200" />
         <input v-model="testDraft.standard" placeholder="Norma (ej. NCh1565)" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200" />
         <input v-model="testDraft.laboratory" placeholder="Laboratorio" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200" />
         <input v-model="testDraft.sampleLocation" placeholder="Ubicación de la muestra" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200" />
-        <textarea v-model="testDraft.resultSummary" rows="2" placeholder="Resultado / resumen" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200 sm:col-span-2" />
+        <textarea v-model="testDraft.resultSummary" rows="2" :placeholder="resultHint ? 'Resultado, ej. ' + resultHint : 'Resultado / resumen'" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200 sm:col-span-2" />
         <div class="flex gap-2 sm:col-span-2">
           <button type="submit" class="rounded-md bg-brand-600 px-3 py-1.5 text-xs font-medium text-ink-950 hover:bg-brand-500 disabled:opacity-50" :disabled="!testDraft.testType.trim() || !testDraft.resultSummary.trim()">Guardar</button>
           <button type="button" class="rounded-md border border-ink-700 px-2 py-1.5 text-xs text-ink-300" @click="showNewTest = false">Cancelar</button>

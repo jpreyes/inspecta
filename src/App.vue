@@ -11,9 +11,11 @@ import InspectionPanel from './components/inspection/InspectionPanel.vue'
 import ResultsView from './components/results/ResultsView.vue'
 import DamageListView from './components/list/DamageListView.vue'
 import DamageForm from './components/inspection/DamageForm.vue'
+import TourOverlay from './components/tour/TourOverlay.vue'
 
 const store = useInspectionStore()
-const { ready, activeView, damageFormOpen, sidebarOpen, activeStructure } = storeToRefs(store)
+const { ready, activeView, damageFormOpen, sidebarOpen, activeStructure, tourOpen } =
+  storeToRefs(store)
 
 onMounted(() => store.init())
 </script>
@@ -81,6 +83,9 @@ onMounted(() => store.init())
 
     <!-- Formulario "daño primero" (global, sobre cualquier vista) -->
     <DamageForm v-if="damageFormOpen" />
+
+    <!-- Guía de la plataforma: se abre sola la primera vez -->
+    <TourOverlay v-if="ready && tourOpen" />
   </div>
 </template>
 

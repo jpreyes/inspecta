@@ -75,6 +75,7 @@ function display(m: { userId: string; name?: string; email?: string }) {
 <template>
   <div class="relative">
     <button
+      data-tour="team"
       class="flex items-center gap-1.5 rounded-md border border-ink-700 px-2.5 py-1 text-xs text-ink-300 transition-colors hover:bg-ink-800"
       @click="open = !open"
     >

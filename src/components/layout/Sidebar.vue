@@ -188,7 +188,7 @@ const structureDamaged = computed(() => Object.keys(severityByElement.value).len
 </script>
 
 <template>
-  <aside class="flex flex-col overflow-hidden">
+  <aside data-tour="sidebar" class="flex flex-col overflow-hidden">
     <div class="flex items-center justify-between px-4 py-3 text-xs uppercase tracking-wide text-ink-500">
       <span>Estructura y elementos</span>
       <div class="flex items-center gap-1">
