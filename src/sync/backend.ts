@@ -3,7 +3,12 @@ import type { Team } from '../types/team'
 
 /** Registro remoto de `teams` → modelo de la app. */
 function teamFromRecord(rec: Record<string, unknown> & { id: string }): Team {
-  const list = (v: unknown): string[] => (Array.isArray(v) ? (v as string[]) : [])
+  // Una relación multi-valor llega como arreglo. Un valor suelto se envuelve:
+  // es lo que devolvían estos campos cuando estaban mal declarados como
+  // relación simple (ver pb_migrations/1721000400_multi_role_relations.js), y
+  // leerlo como lista vacía dejaba al usuario sin rol reconocido.
+  const list = (v: unknown): string[] =>
+    Array.isArray(v) ? (v as string[]) : typeof v === 'string' && v ? [v] : []
   return {
     id: rec.id,
     name: String(rec.name ?? ''),

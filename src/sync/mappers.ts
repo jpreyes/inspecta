@@ -134,7 +134,13 @@ export function structureFromRemote(r: any): Structure {
     vulnerability: vuln,
     site,
     teamId: r.team || undefined,
-    inspectorIds: Array.isArray(r.inspectors) ? r.inspectors : undefined,
+    // Igual que las listas de rol del equipo: arreglo normalmente, valor suelto
+    // si la relación quedó declarada como simple (ver migración 1721000400).
+    inspectorIds: Array.isArray(r.inspectors)
+      ? r.inspectors
+      : typeof r.inspectors === 'string' && r.inspectors
+        ? [r.inspectors]
+        : undefined,
   }
 }
 
