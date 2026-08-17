@@ -273,13 +273,34 @@ export const useInspectionStore = defineStore('inspection', () => {
 
     if (!localStorage.getItem(DEMO_KEY)) await seedIfEmpty()
     await reload()
-    selectedStructureId.value = structures.value[0]?.id ?? null
-    inspectionIndex.value = Math.max(0, structureInspections.value.length - 1)
+    focusInitialStructure()
     // Primera vez en este dispositivo: se abre la guía.
     if (!localStorage.getItem(TOUR_KEY)) startTour()
-    loadTeams().catch(() => {
+    await loadTeams().catch(() => {
       teamMessage.value = 'No se pudieron cargar los equipos (sin conexión).'
     })
+
+    // Traer lo del servidor SIN esperar a que alguien apriete "Sincronizar".
+    // Sin esto, quien entra por primera vez en un dispositivo solo ve la
+    // siembra de ejemplo —que es local— y sus proyectos de equipo no aparecen
+    // nunca: el trabajo real existía en el servidor pero nadie lo iba a buscar.
+    // Sin conexión no es un fallo (la app es offline-first), así que el error
+    // se traga: queda el botón manual y el aviso de "sin señal".
+    if (await backend.isReachable()) {
+      await syncNow().catch(() => {})
+      focusInitialStructure()
+    }
+  }
+
+  /**
+   * Elige qué estructura mostrar al abrir. Prefiere una real —del equipo o
+   * creada por el usuario— y deja la de ejemplo solo como último recurso: si
+   * hay trabajo de verdad, aterrizar en la demo hace parecer que no llegó.
+   */
+  function focusInitialStructure() {
+    const real = structures.value.find((s) => !isDemoRecord(s.id))
+    selectedStructureId.value = real?.id ?? structures.value[0]?.id ?? null
+    inspectionIndex.value = Math.max(0, structureInspections.value.length - 1)
   }
 
   /** Borra los datos locales (al entrar otra cuenta en el mismo dispositivo). */
