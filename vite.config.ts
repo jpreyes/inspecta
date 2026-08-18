@@ -41,7 +41,7 @@ export default defineConfig(({ mode }) => {
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Inspecta — Inspecciones Estructurales',
         short_name: 'Inspecta',
@@ -49,8 +49,20 @@ export default defineConfig(({ mode }) => {
         theme_color: '#0f172a',
         background_color: '#0f172a',
         display: 'standalone',
+        // Separados a propósito. Un mismo archivo marcado `any maskable` no
+        // puede servir para las dos cosas: `maskable` se recorta a un círculo,
+        // así que necesita margen de seguridad, y `any` tiene que llenar el
+        // cuadro o se ve chico y flotando. Antes era uno solo con las dos
+        // marcas, y perdía por los dos lados.
+        //
+        // Y van PNG además del SVG: los lanzadores de Android siguen
+        // prefiriéndolos, e iOS ni siquiera mira el manifest (usa
+        // `apple-touch-icon`, que va en index.html).
         icons: [
-          { src: 'favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
+          { src: 'favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+          { src: 'icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: 'icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {
