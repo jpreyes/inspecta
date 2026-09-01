@@ -191,6 +191,41 @@ export const NONSTRUCTURAL_CATALOG: StructureCatalog = {
         },
       ],
     },
+    {
+      // Genérico deliberado, y al final de la lista. En terreno aparece siempre
+      // algo que el catálogo no nombra —un mueble anclado, una señalética, una
+      // celosía— y sin esta salida el daño no se registraba: el formulario
+      // obliga a elegir un elemento, y ninguno calzaba. Los materiales y zonas
+      // son los transversales; para el resto está "Otro…" en cada campo.
+      component: 'Otro elemento no estructural',
+      elements: [
+        {
+          element: 'Elemento no estructural (genérico)',
+          materials: [
+            'Hormigón',
+            'Albañilería',
+            'Acero',
+            'Aluminio',
+            'Metálico',
+            'Madera',
+            'Vidrio',
+            'Yeso-cartón',
+            'PVC',
+            'Plástico',
+            'Cerámica / porcelanato',
+          ],
+          zones: [
+            'Paño central',
+            'Borde / perímetro',
+            'Anclaje / fijación',
+            'Unión / junta',
+            'Base / apoyo',
+            'Coronación',
+            'Otro',
+          ],
+        },
+      ],
+    },
   ],
 
   // Deterioros típicos de lo no estructural. Las bandas de gravedad son las

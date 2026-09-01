@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
-import { Plus, Trash2, Radio, Users } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, Radio, Users, FlaskConical } from 'lucide-vue-next'
 import { useInspectionStore } from '../../stores/inspection'
 import { iconForDamage } from '../../ui/icons'
 import { CONDITION, SEVERITY, findingIndex, type Finding } from '../../types/inspection'
@@ -101,6 +101,9 @@ const photosOf = (f: Finding) => f.photos.slice(0, 3)
           <span class="text-sm font-semibold" :style="{ color: condition.color }">{{ condition.label }}</span>
           <span class="text-xs text-ink-500">{{ structureCondition }}/100</span>
         </div>
+        <!-- Daño y ensayo se registran en la misma pasada por la estructura: el
+             ensayo tiene vista propia, pero el botón vive también acá para no
+             obligar a cambiar de vista para encontrarlo. -->
         <button
           v-if="canWorkHere"
           data-tour="new-damage"
@@ -108,6 +111,14 @@ const photosOf = (f: Finding) => f.photos.slice(0, 3)
           @click="store.openDamageForm()"
         >
           <Plus :size="16" /> Nuevo daño
+        </button>
+        <button
+          v-if="canWorkHere && activeInspection"
+          class="flex items-center gap-1.5 rounded-lg border border-ink-700 px-4 py-2 text-sm font-semibold text-ink-200 hover:bg-ink-800"
+          title="Registrar un ensayo en esta campaña"
+          @click="store.openTestForm()"
+        >
+          <FlaskConical :size="16" /> Nuevo ensayo
         </button>
       </div>
     </header>
@@ -152,7 +163,12 @@ const photosOf = (f: Finding) => f.photos.slice(0, 3)
               </tr>
             </thead>
             <tbody class="divide-y divide-ink-800">
-              <tr v-for="f in g.rows" :key="f.id" class="bg-ink-900/50 hover:bg-ink-850">
+              <tr
+                v-for="f in g.rows"
+                :key="f.id"
+                :data-finding="f.id"
+                class="bg-ink-900/50 hover:bg-ink-850"
+              >
                 <td class="px-3 py-2 font-medium text-ink-100">
                   {{ f.element }}
                   <span v-if="f.component" class="block text-[10px] font-normal text-ink-600">{{ f.component }}</span>
@@ -195,14 +211,29 @@ const photosOf = (f: Finding) => f.photos.slice(0, 3)
                   <span class="block text-[10px] text-ink-600">{{ fmtStamp(f.createdAt) }}</span>
                 </td>
                 <td class="px-3 py-2 text-right">
-                  <button
-                    v-if="canWorkHere"
-                    class="text-ink-600 hover:text-red-400"
-                    title="Eliminar"
-                    @click="store.removeFinding(f.id)"
-                  >
-                    <Trash2 :size="14" />
-                  </button>
+                  <!-- Editar y eliminar van juntos y con el mismo permiso: si el
+                       rol alcanza para borrar el hallazgo de otra persona,
+                       corregirle un dato es lo menos destructivo de los dos. -->
+                  <div class="flex items-center justify-end gap-2">
+                    <button
+                      v-if="canWorkHere"
+                      class="text-ink-600 hover:text-brand-500"
+                      title="Editar"
+                      aria-label="Editar hallazgo"
+                      @click="store.editFinding(f.id)"
+                    >
+                      <Pencil :size="14" />
+                    </button>
+                    <button
+                      v-if="canWorkHere"
+                      class="text-ink-600 hover:text-red-400"
+                      title="Eliminar"
+                      aria-label="Eliminar hallazgo"
+                      @click="store.removeFinding(f.id)"
+                    >
+                      <Trash2 :size="14" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tbody>

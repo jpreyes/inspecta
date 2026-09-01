@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
-import { Trash2, X, Plus } from 'lucide-vue-next'
+import { Pencil, Trash2, X, Plus } from 'lucide-vue-next'
 import { useInspectionStore } from '../../stores/inspection'
 import { iconForDamage } from '../../ui/icons'
 import { SEVERITY, findingIndex } from '../../types/inspection'
@@ -80,13 +80,20 @@ function register() {
         <div class="mt-2 flex items-center justify-between">
           <span v-if="f.authorName" class="text-[10px] text-ink-600">Registró {{ f.authorName }}</span>
           <span v-else />
-          <button
-            v-if="canWorkHere"
-            class="flex items-center gap-1 text-[11px] text-ink-500 hover:text-red-400"
-            @click="store.removeFinding(f.id)"
-          >
-            <Trash2 :size="12" /> Eliminar
-          </button>
+          <div v-if="canWorkHere" class="flex items-center gap-3">
+            <button
+              class="flex items-center gap-1 text-[11px] text-ink-500 hover:text-brand-500"
+              @click="store.editFinding(f.id)"
+            >
+              <Pencil :size="12" /> Editar
+            </button>
+            <button
+              class="flex items-center gap-1 text-[11px] text-ink-500 hover:text-red-400"
+              @click="store.removeFinding(f.id)"
+            >
+              <Trash2 :size="12" /> Eliminar
+            </button>
+          </div>
         </div>
       </div>
     </div>

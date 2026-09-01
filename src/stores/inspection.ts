@@ -83,8 +83,16 @@ export const useInspectionStore = defineStore('inspection', () => {
 
   // Formulario "daño primero": se abre desde cualquier lado, el elemento es un
   // campo del formulario (no hay que preseleccionarlo navegando el árbol).
+  // El MISMO formulario crea y edita: `damageFormFindingId` distingue los dos
+  // casos (null = alta nueva).
   const damageFormOpen = ref(false)
   const damageFormElementId = ref<string | null>(null)
+  const damageFormFindingId = ref<string | null>(null)
+
+  // Formulario de ensayo. Vive en el store —y no dentro de TestsView— porque se
+  // abre también desde la lista de daños, que es otra vista: en terreno el
+  // ensayo y el daño se registran en la misma pasada.
+  const testFormOpen = ref(false)
 
   // ── Sync / autenticación (PocketBase) ──────────────────
   const authUser = ref<RemoteUser | null>(backend.user)
@@ -566,12 +574,37 @@ export const useInspectionStore = defineStore('inspection', () => {
   }
 
   function openDamageForm(elementId?: string) {
+    damageFormFindingId.value = null
     damageFormElementId.value = elementId ?? null
+    damageFormOpen.value = true
+  }
+  /** Abre el formulario sobre un hallazgo ya registrado. El permiso es el mismo
+   *  que para borrarlo: quien puede trabajar en la estructura corrige lo que
+   *  hay, sea suyo o de otra persona del equipo (el servidor manda igual). */
+  function editFinding(id: string) {
+    const f = findings.value.find((x) => x.id === id)
+    if (!f) return
+    damageFormFindingId.value = id
+    damageFormElementId.value = f.elementId ?? null
     damageFormOpen.value = true
   }
   function closeDamageForm() {
     damageFormOpen.value = false
     damageFormElementId.value = null
+    damageFormFindingId.value = null
+  }
+  /** Hallazgo en edición (null si el formulario es un alta). */
+  const damageFormFinding = computed(
+    () => findings.value.find((f) => f.id === damageFormFindingId.value) ?? null,
+  )
+
+  /** Abre el formulario de ensayo, cambiando de vista si hace falta. */
+  function openTestForm() {
+    activeView.value = 'tests'
+    testFormOpen.value = true
+  }
+  function closeTestForm() {
+    testFormOpen.value = false
   }
 
   // ── Auth + sync ────────────────────────────────────────
@@ -1129,6 +1162,9 @@ export const useInspectionStore = defineStore('inspection', () => {
     pendingPin,
     damageFormOpen,
     damageFormElementId,
+    damageFormFindingId,
+    damageFormFinding,
+    testFormOpen,
     sidebarOpen,
     authUser,
     syncing,
@@ -1211,7 +1247,10 @@ export const useInspectionStore = defineStore('inspection', () => {
     toggleSidebar,
     closeSidebar,
     openDamageForm,
+    editFinding,
     closeDamageForm,
+    openTestForm,
+    closeTestForm,
     login,
     logout,
     syncNow,

@@ -6,7 +6,7 @@
 // —con el teléfono en una mano— hacía que simplemente no se registraran.
 // Acá tienen pantalla propia, con las dos acciones que se hacen de verdad:
 // crear la campaña del año y agregar el ensayo.
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { FlaskConical, Plus, Trash2, CalendarDays } from 'lucide-vue-next'
 import { useInspectionStore } from '../../stores/inspection'
@@ -14,9 +14,12 @@ import { TEST_PRESETS, type TestPreset } from '../../data/tests'
 import InspectionSelector from '../inspection/InspectionSelector.vue'
 
 const store = useInspectionStore()
-const { activeStructure, activeInspection, currentTests, canWorkHere } = storeToRefs(store)
+const { activeStructure, activeInspection, currentTests, canWorkHere, testFormOpen } =
+  storeToRefs(store)
 
-const showNew = ref(false)
+// El formulario se abre también desde la lista de daños (otra vista), así que
+// la bandera vive en el store y no acá.
+const showNew = testFormOpen
 const draft = reactive({
   testType: '',
   method: '',
@@ -44,6 +47,13 @@ function openNew() {
   error.value = ''
   showNew.value = true
 }
+
+// Llegar desde la lista de daños con «Nuevo ensayo» abre la vista con el
+// formulario ya pedido: hay que rellenar el borrador igual que al abrirlo acá.
+if (showNew.value) openNew()
+watch(showNew, (open) => {
+  if (open) openNew()
+})
 
 /** Atajo: rellena tipo, método y norma; el resto lo pone el inspector. */
 function applyPreset(p: TestPreset) {

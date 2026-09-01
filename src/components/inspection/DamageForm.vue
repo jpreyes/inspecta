@@ -8,6 +8,7 @@ import {
   elementInfo,
   damagesForMaterial,
   causesForDamage,
+  isNonStructural,
   SEVERITY,
   type DamageScope,
   type Photo,
@@ -15,7 +16,8 @@ import {
 } from '../../types/inspection'
 
 const store = useInspectionStore()
-const { activeStructure, activeInspection, damageFormElementId } = storeToRefs(store)
+const { activeStructure, activeInspection, damageFormElementId, damageFormFinding } =
+  storeToRefs(store)
 
 // Elemento del modelo 3D vinculado (si el formulario se abrió desde el gemelo):
 // el hallazgo se ata a ese elemento para colorear la malla y habilitar "Ver en 3D".
@@ -27,7 +29,15 @@ const linkedElement = computed(() =>
 // barandas, instalaciones) se registra igual y sale en el informe, pero no
 // entra en la calificación: cambiarlo cambia el catálogo completo del
 // formulario, porque los deterioros y las causas son otros.
-const scope = ref<DamageScope>('estructural')
+// El formulario es el mismo para crear y para corregir. Editar hacía falta de
+// verdad: sin esto, un dato mal puesto —propio o de otra persona del equipo—
+// solo se podía borrar y volver a escribir entero, y con él se perdían las
+// fotos. Se lee UNA vez, sin reactividad: el formulario se monta con `v-if`
+// para cada apertura, y así la carga inicial de abajo corre antes que los watch.
+const editar = damageFormFinding.value
+const scope = ref<DamageScope>(
+  editar && isNonStructural(editar) ? 'no-estructural' : 'estructural',
+)
 const cat = computed(() => catalogForScope(activeStructure.value?.type, scope.value))
 const severities = [1, 2, 3, 4, 0] as Severity[]
 
@@ -67,9 +77,44 @@ const causeValue = computed(() => (form.cause === 'Otro' ? form.causeOther.trim(
 const canSave = computed(() => !!elementValue.value && !!damageValue.value && !!activeInspection.value)
 const saving = ref(false)
 
-// defaults + resets en cascada
-form.component = components.value[0]?.component ?? ''
-form.element = elementOptions.value[0]?.element ?? ''
+// Valores iniciales. Se resuelven ANTES de registrar los watch de más abajo:
+// esos watch limpian material/zona/daño en cascada, y si corrieran sobre la
+// carga de un hallazgo existente lo dejarían a medio llenar.
+if (editar) {
+  // Un valor guardado puede no estar en el catálogo (se escribió con "Otro…",
+  // o el catálogo cambió): en ese caso vuelve al campo libre, que es donde el
+  // inspector lo puso.
+  const pick = (value: string | undefined, options: string[], other: 'elementOther' | 'materialOther' | 'zoneOther' | 'damageOther' | 'causeOther') => {
+    const v = (value ?? '').trim()
+    if (!v) return ''
+    if (options.includes(v)) return v
+    form[other] = v
+    return 'Otro'
+  }
+  // El componente sale del catálogo (donde vive el elemento). Si el elemento se
+  // escribió a mano, se respeta el guardado solo si el catálogo lo conoce.
+  const enCatalogo = cat.value.components.find((c) =>
+    c.elements.some((e) => e.element === editar.element),
+  )?.component
+  const guardado = components.value.some((c) => c.component === editar.component)
+    ? editar.component
+    : undefined
+  form.component = enCatalogo ?? guardado ?? components.value[0]?.component ?? ''
+  form.element = pick(editar.element, elementOptions.value.map((e) => e.element), 'elementOther')
+  form.material = pick(editar.material, materialOptions.value, 'materialOther')
+  form.zone = pick(editar.zone, zoneOptions.value, 'zoneOther')
+  form.damageType = pick(editar.damageType, damageOptions.value.map((d) => d.name), 'damageOther')
+  form.cause = pick(editar.cause, causeOptions.value, 'causeOther')
+  form.severity = editar.severity
+  form.extension = editar.extension
+  form.notes = editar.notes ?? ''
+  form.photos = [...editar.photos]
+} else {
+  form.component = components.value[0]?.component ?? ''
+  form.element = elementOptions.value[0]?.element ?? ''
+}
+
+// resets en cascada
 watch(scope, () => {
   form.component = components.value[0]?.component ?? ''
   form.element = elementOptions.value[0]?.element ?? ''
@@ -115,10 +160,13 @@ async function onPhoto(ev: Event) {
   ;(ev.target as HTMLInputElement).value = ''
 }
 
+const error = ref('')
+
 async function submit() {
   if (!canSave.value || saving.value) return
   saving.value = true
-  const f = await store.addFinding({
+  error.value = ''
+  const datos = {
     component: form.component || undefined,
     element: elementValue.value,
     material: materialValue.value || undefined,
@@ -130,8 +178,21 @@ async function submit() {
     extension: form.extension,
     nonStructural: scope.value === 'no-estructural',
     notes: form.notes,
-  })
-  if (f && form.photos.length) await store.updateFinding(f.id, { photos: [...form.photos] })
+  }
+  try {
+    if (editar) {
+      // Las fotos van en el mismo patch: acá están las ya subidas (con
+      // `remoteName`) más las que se acaben de agregar.
+      await store.updateFinding(editar.id, { ...datos, photos: [...form.photos] })
+    } else {
+      const f = await store.addFinding(datos)
+      if (f && form.photos.length) await store.updateFinding(f.id, { photos: [...form.photos] })
+    }
+  } catch (e) {
+    error.value = (e as Error)?.message ?? String(e)
+    saving.value = false
+    return
+  }
   saving.value = false
   store.closeDamageForm()
 }
@@ -146,11 +207,12 @@ const textCls =
     <div class="w-full max-w-lg rounded-xl border border-ink-800 bg-ink-900 shadow-2xl">
       <div class="flex items-center justify-between border-b border-ink-800 px-4 py-3">
         <div>
-          <h2 class="text-sm font-semibold text-ink-100">Nuevo daño</h2>
+          <h2 class="text-sm font-semibold text-ink-100">{{ editar ? 'Editar daño' : 'Nuevo daño' }}</h2>
           <p class="text-[11px] text-ink-500">
             {{ activeStructure?.name }} · campaña {{ activeInspection?.date }}
             <span v-if="linkedElement" class="text-brand-500">· elemento {{ linkedElement.tag }}</span>
             <span v-if="scope === 'no-estructural'" class="text-amber-400">· no estructural</span>
+            <span v-if="editar?.authorName" class="text-ink-600">· registró {{ editar.authorName }}</span>
           </p>
         </div>
         <!-- El área tocable va más allá del ícono: 18px son incómodos con el dedo. -->
@@ -287,14 +349,37 @@ const textCls =
             <Camera :size="14" /> Agregar foto
             <input type="file" accept="image/*" capture="environment" multiple class="hidden" @change="onPhoto" />
           </label>
+          <!-- `url` (no solo `dataUrl`): al editar, las fotos ya subidas viven en
+               el servidor y solo tienen su enlace. -->
           <div v-if="form.photos.length" class="flex gap-2 overflow-x-auto">
-            <img v-for="p in form.photos" :key="p.id" :src="p.dataUrl" class="h-14 w-14 shrink-0 rounded object-cover" />
+            <div v-for="(p, i) in form.photos" :key="p.id" class="relative shrink-0">
+              <img :src="p.dataUrl || p.url" class="h-14 w-14 rounded object-cover" />
+              <!-- Solo se quitan las fotos que aún NO subieron. Una ya subida
+                   vive en el servidor: sacarla de la lista local no la borra de
+                   allá y el siguiente pull la devuelve, así que el botón sería
+                   mentira (borrar archivos remotos es otra conversación con el
+                   sync, ver sync/engine.ts). -->
+              <button
+                v-if="!p.remoteName"
+                type="button"
+                class="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-ink-950/90 text-ink-400 hover:text-red-400"
+                title="Quitar foto"
+                aria-label="Quitar foto"
+                @click="form.photos.splice(i, 1)"
+              >
+                <X :size="11" />
+              </button>
+            </div>
           </div>
         </div>
 
+        <p v-if="error" class="text-[11px] text-red-400">{{ error }}</p>
+
         <div class="flex gap-2 pt-1">
           <button type="button" class="flex-1 rounded-md border border-ink-700 py-2 text-sm text-ink-300 hover:bg-ink-800" @click="store.closeDamageForm()">Cancelar</button>
-          <button type="submit" class="flex-1 rounded-md bg-brand-600 py-2 text-sm font-medium text-ink-950 hover:bg-brand-500 disabled:opacity-50" :disabled="!canSave || saving">Guardar daño</button>
+          <button type="submit" class="flex-1 rounded-md bg-brand-600 py-2 text-sm font-medium text-ink-950 hover:bg-brand-500 disabled:opacity-50" :disabled="!canSave || saving">
+            {{ editar ? 'Guardar cambios' : 'Guardar daño' }}
+          </button>
         </div>
       </form>
     </div>
