@@ -31,10 +31,11 @@ EXPOSE 8090
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s \
   CMD wget -qO- http://127.0.0.1:8090/api/health >/dev/null 2>&1 || exit 1
 
-# Los tres directorios van absolutos: los valores por defecto de PocketBase son
-# relativos a la ubicación del binario (/usr/local/bin), no al WORKDIR.
+# Los cuatro directorios van absolutos: los valores por defecto de PocketBase
+# son relativos a la ubicación del binario (/usr/local/bin), no al WORKDIR.
 CMD ["pocketbase", "serve", \
      "--http=0.0.0.0:8090", \
      "--dir=/pb/pb_data", \
      "--migrationsDir=/pb/pb_migrations", \
+     "--hooksDir=/pb/pb_hooks", \
      "--publicDir=/pb/pb_public"]

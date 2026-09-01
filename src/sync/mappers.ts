@@ -9,7 +9,15 @@ import { backend } from './backend'
 
 type Remote = Record<string, unknown>
 
-/** PocketBase espera '' (no null/undefined) para una relación vacía. */
+/**
+ * PocketBase espera '' (no null/undefined) para una relación vacía.
+ *
+ * OJO con `team` y `author`: al CREAR hay que mandarlos aunque estén vacíos
+ * (la regla de creación compara `@request.body.team = ""`), pero al ACTUALIZAR
+ * no — un dispositivo cuya copia local no conoce el equipo le borraría el
+ * equipo al registro del servidor. Eso no se resuelve acá sino en
+ * `backend.push`, que es quien sabe si está creando o actualizando.
+ */
 const rel = (id?: string) => id ?? ''
 
 // ── local → remoto (para push) ──────────────────────────────

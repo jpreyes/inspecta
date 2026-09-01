@@ -22,6 +22,20 @@ export interface StoredModel {
   updatedAt: string
 }
 
+/** Foto YA subida que alguien borró y que todavía hay que borrar en el servidor.
+ *
+ *  Hace falta una lista aparte porque el borrado tiene que sobrevivir a estar
+ *  sin señal: si solo se quitara del hallazgo, el siguiente pull —que trae del
+ *  servidor la lista de archivos— la devolvería como si nada. La lápida se
+ *  aplica en la sincronización y hasta entonces filtra lo que llega (ver
+ *  sync/photos.ts y sync/apply.ts). */
+export interface PhotoTrash {
+  /** nombre del archivo en PocketBase */
+  remoteName: string
+  findingId: string
+  at: string
+}
+
 // Base offline-first: todo vive en IndexedDB para trabajo en terreno sin señal.
 export const db = new Dexie('inspecta') as Dexie & {
   projects: EntityTable<Project, 'id'>
@@ -30,6 +44,7 @@ export const db = new Dexie('inspecta') as Dexie & {
   findings: EntityTable<Finding, 'id'>
   tests: EntityTable<Test, 'id'>
   models: EntityTable<StoredModel, 'structureId'>
+  photoTrash: EntityTable<PhotoTrash, 'remoteName'>
 }
 
 db.version(1).stores({
@@ -59,6 +74,12 @@ db.version(3).stores({
 // indexa (no tendría sentido y ocuparía el doble).
 db.version(4).stores({
   models: 'structureId',
+})
+
+// v5: papelera de fotos subidas. Solo la clave y el hallazgo: es una lista
+// corta y efímera —cada entrada vive hasta la siguiente sincronización.
+db.version(5).stores({
+  photoTrash: 'remoteName, findingId',
 })
 
 /** Siembra cada tabla que esté vacía (robusto ante bases ya creadas). */

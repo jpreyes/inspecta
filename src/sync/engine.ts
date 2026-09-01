@@ -2,6 +2,7 @@ import { db } from '../db'
 import { backend, dataUrlToFile, type RemoteCollection } from './backend'
 import * as M from './mappers'
 import { upsertFinding, upsertStructure } from './apply'
+import { flushPhotoDeletions } from './photos'
 import { isDemoRecord } from '../data/seed'
 import type { Inspection, Structure } from '../types/inspection'
 import { can as roleCan, roleInTeam, type Role, type Team } from '../types/team'
@@ -18,6 +19,8 @@ export interface SyncResult {
   pulled: number
   /** Registros que no se enviaron: ajenos al rol, demo, o rechazados. */
   skipped: number
+  /** Fotos borradas en el servidor (se habían borrado en el dispositivo). */
+  photosRemoved: number
 }
 
 /**
@@ -40,6 +43,7 @@ export async function syncNow(): Promise<SyncResult> {
   let models = 0
   let pulled = 0
   let skipped = 0
+  let photosRemoved = 0
 
   // ── Permisos: qué puede escribir este usuario en el servidor ──
   // Se resuelve con los equipos del servidor (fuente de verdad), no con el
@@ -167,9 +171,14 @@ export async function syncNow(): Promise<SyncResult> {
   )
 
   // ── FOTOS: subir las locales que aún no tienen archivo remoto ──
+  //
+  // El `remoteName` se anota releyendo el hallazgo de Dexie, no sobre la copia
+  // que se leyó al empezar la corrida: mientras esto sube, la escucha en vivo
+  // está aplicando sobre el mismo registro los eventos del propio push, y
+  // guardar la copia vieja encima resucitaba la foto como si no se hubiera
+  // subido — para volver a subirla, duplicada, en la corrida siguiente.
   for (const f of pushableFindings) {
     if (!PB_ID.test(f.id)) continue
-    let changed = false
     for (const ph of f.photos) {
       if (ph.remoteName || !ph.dataUrl) continue // ya subida, o sin base64
       try {
@@ -178,18 +187,31 @@ export async function syncNow(): Promise<SyncResult> {
         } & Record<string, unknown>
         const names = rec.photos ?? []
         const newName = names[names.length - 1]
-        if (newName) {
-          ph.remoteName = newName
-          ph.url = backend.fileUrl(rec as { id: string; collectionId?: string }, newName)
-          photos++
-          changed = true
+        if (!newName) continue
+        const url = backend.fileUrl(rec as { id: string; collectionId?: string }, newName)
+        ph.remoteName = newName
+        ph.url = url
+        const fresco = await db.findings.get(f.id)
+        if (fresco) {
+          const suya = fresco.photos.find((x) => x.id === ph.id)
+          if (suya) {
+            suya.remoteName = newName
+            suya.url = url
+          }
+          await db.findings.put(fresco)
         }
+        photos++
       } catch {
         skipped++
       }
     }
-    if (changed) await db.findings.put(f)
   }
+
+  // ── BORRADOS DE FOTOS PENDIENTES ──
+  // Antes del pull, y no después: si el archivo sigue en el servidor cuando
+  // llega el registro, la foto borrada vuelve a aparecer. (`upsertFinding`
+  // igual filtra por la papelera, pero el orden correcto ahorra el rebote.)
+  photosRemoved = await flushPhotoDeletions()
 
   // ── PULL (upsert remoto → local) ──
   const pullInto = async <T extends { id: string }>(
@@ -223,5 +245,5 @@ export async function syncNow(): Promise<SyncResult> {
   }
   await pullInto(db.tests, (await backend.pull('tests', undefined, 'author')).map(M.testFromRemote))
 
-  return { pushed, photos, models, pulled, skipped }
+  return { pushed, photos, models, pulled, skipped, photosRemoved }
 }

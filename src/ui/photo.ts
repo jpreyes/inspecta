@@ -60,3 +60,40 @@ export async function fileToPhotoDataUrl(file: File | Blob): Promise<string> {
     return readAsDataUrl(file)
   }
 }
+
+/** ¿Esta foto ya está a tamaño estándar? (JPEG y dentro del lado máximo). */
+async function medir(blob: Blob) {
+  const bmp = await createImageBitmap(blob)
+  const size = { w: bmp.width, h: bmp.height }
+  bmp.close?.()
+  return size
+}
+
+/**
+ * Reduce una foto YA guardada. Devuelve `null` si no hace falta tocarla —que es
+ * lo normal a partir de la segunda pasada—, para no recomprimir un JPEG una y
+ * otra vez: cada recompresión pierde calidad aunque no gane ni un byte.
+ */
+export async function shrinkStored(blob: Blob): Promise<Blob | null> {
+  const { w, h } = await medir(blob)
+  if (Math.max(w, h) <= PHOTO_MAX_EDGE && blob.type === 'image/jpeg') return null
+  const dataUrl = await fileToPhotoDataUrl(blob)
+  const reducida = await (await fetch(dataUrl)).blob()
+  // Si el resultado no es más liviano, la original se queda: pasa con fotos
+  // pequeñas que ya venían muy comprimidas.
+  return reducida.size < blob.size ? reducida : null
+}
+
+/** Lo mismo sobre el base64 que guarda Dexie. `null` = ya estaba bien. */
+export async function shrinkDataUrl(dataUrl: string): Promise<string | null> {
+  const blob = await (await fetch(dataUrl)).blob()
+  const reducida = await shrinkStored(blob)
+  return reducida ? readAsDataUrl(reducida) : null
+}
+
+/** Bytes que ocupa un dataURL base64 (aproximado, sirve para informar). */
+export function dataUrlBytes(dataUrl?: string): number {
+  if (!dataUrl) return 0
+  const b64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
+  return Math.round((b64.length * 3) / 4)
+}

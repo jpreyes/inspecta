@@ -150,6 +150,15 @@ watch(
 // La foto se guarda a tamaño estándar (HD), no como sale de la cámara: ver
 // src/ui/photo.ts — 12 MP por hallazgo llenan el navegador y no se suben nunca
 // desde terreno.
+// Fotos ya subidas que se quitaron en esta edición. No se borran al apretar la
+// X sino al Guardar: si no, "Cancelar" ya habría borrado la foto del servidor.
+const fotosQuitadas = ref<string[]>([])
+function quitarFoto(i: number) {
+  const p = form.photos[i]
+  if (p?.remoteName) fotosQuitadas.value.push(p.remoteName)
+  form.photos.splice(i, 1)
+}
+
 async function onPhoto(ev: Event) {
   const files = (ev.target as HTMLInputElement).files
   if (!files) return
@@ -184,6 +193,9 @@ async function submit() {
       // Las fotos van en el mismo patch: acá están las ya subidas (con
       // `remoteName`) más las que se acaben de agregar.
       await store.updateFinding(editar.id, { ...datos, photos: [...form.photos] })
+      // Y las que se quitaron hay que borrarlas también del servidor, o el
+      // siguiente pull las devuelve.
+      await store.removeStoredPhotos(editar.id, fotosQuitadas.value)
     } else {
       const f = await store.addFinding(datos)
       if (f && form.photos.length) await store.updateFinding(f.id, { photos: [...form.photos] })
@@ -361,18 +373,16 @@ const textCls =
               >
                 <img :src="p.dataUrl || p.url" class="h-full w-full object-cover" />
               </button>
-              <!-- Solo se quitan las fotos que aún NO subieron. Una ya subida
-                   vive en el servidor: sacarla de la lista local no la borra de
-                   allá y el siguiente pull la devuelve, así que el botón sería
-                   mentira (borrar archivos remotos es otra conversación con el
-                   sync, ver sync/engine.ts). -->
+              <!-- Se quita cualquier foto, subida o no. La que ya está en el
+                   servidor se borra allá al guardar (ver sync/photos.ts): sin
+                   eso, sacarla de la lista local no servía de nada porque el
+                   siguiente pull la devolvía. -->
               <button
-                v-if="!p.remoteName"
                 type="button"
                 class="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-ink-950/90 text-ink-400 hover:text-red-400"
                 title="Quitar foto"
                 aria-label="Quitar foto"
-                @click="form.photos.splice(i, 1)"
+                @click="quitarFoto(i)"
               >
                 <X :size="11" />
               </button>

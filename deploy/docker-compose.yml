@@ -29,6 +29,9 @@ services:
       - pb_data:/pb/pb_data
       # Migraciones desde el repo: los cambios de esquema quedan versionados.
       - ../pocketbase/pb_migrations:/pb/pb_migrations
+      # Hooks del servidor (JSVM). Hoy solo uno: impedir que un cliente viejo
+      # deje un registro sin equipo (ver pb_hooks/keep_team.pb.js).
+      - ../pocketbase/pb_hooks:/pb/pb_hooks
     ports:
       - "127.0.0.1:8094:8090"
 

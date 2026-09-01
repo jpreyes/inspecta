@@ -4,11 +4,11 @@
 // hay formulario de login, solo sincronizar y cerrar sesión.
 import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { Cloud, RefreshCw, LogOut } from 'lucide-vue-next'
+import { Cloud, RefreshCw, LogOut, ImageDown } from 'lucide-vue-next'
 import { useInspectionStore } from '../../stores/inspection'
 
 const store = useInspectionStore()
-const { authUser, syncing, lastSyncAt, syncMessage } = storeToRefs(store)
+const { authUser, syncing, lastSyncAt, syncMessage, photoBusy, photoMessage } = storeToRefs(store)
 
 const open = ref(false)
 
@@ -65,6 +65,20 @@ function fmt(iso: string) {
       <p class="mt-2 text-[11px] leading-snug text-ink-600">
         Sin señal la app funciona igual: sincroniza al volver a tener conexión.
       </p>
+
+      <!-- Las fotos de este dispositivo se reducen solas al abrir la app. Esto
+           es para las que están EN EL SERVIDOR: baja cada archivo, lo reescala
+           y lo reemplaza, así que son megabytes y va a mano, no en cada
+           sincronización (en terreno se pagarían con datos móviles). -->
+      <button
+        class="mt-3 flex w-full items-center justify-center gap-1.5 rounded-md border border-ink-700 py-2 text-xs text-ink-300 hover:bg-ink-800 disabled:opacity-50"
+        :disabled="photoBusy || syncing"
+        @click="store.shrinkStoredPhotos()"
+      >
+        <ImageDown :size="13" />
+        {{ photoBusy ? 'Reduciendo fotos…' : 'Reducir fotos ya guardadas' }}
+      </button>
+      <p v-if="photoMessage" class="mt-1 text-[11px] leading-snug text-ink-400">{{ photoMessage }}</p>
       <button
         class="mt-3 flex items-center gap-1 text-[11px] text-ink-500 hover:text-red-400"
         @click="doLogout"

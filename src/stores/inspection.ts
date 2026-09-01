@@ -16,6 +16,7 @@ import { generateFrame } from '../data/generate'
 import { registeredIrregularities, riskLevel } from '../data/vulnerability'
 import { hazardIndex, type SiteConfig } from '../data/hazard'
 import { db, seedIfEmpty } from '../db'
+import { compactLocalPhotos, shrinkRemotePhotos, trashPhotos } from '../sync/photos'
 import { parseModel, summarize, kindOf } from '../model'
 import { isDemoRecord } from '../data/seed'
 import { TOUR_STEPS } from '../data/tour'
@@ -99,6 +100,10 @@ export const useInspectionStore = defineStore('inspection', () => {
   // se abren desde la tabla, desde el panel del gemelo y desde el formulario,
   // así que el estado no puede vivir dentro de ninguno de ellos.
   const findingSheetId = ref<string | null>(null)
+  // Mantención de fotos (reducir las ya guardadas). Estado propio y no el del
+  // sync: baja y sube archivos, puede tardar y se dispara a mano.
+  const photoBusy = ref(false)
+  const photoMessage = ref('')
   const photoViewer = ref<{ photos: Photo[]; index: number; caption?: string } | null>(null)
 
   // ── Sync / autenticación (PocketBase) ──────────────────
@@ -339,6 +344,14 @@ export const useInspectionStore = defineStore('inspection', () => {
       await startLive().catch(() => {})
     }
     watchForeground()
+
+    // Las fotos que YA estaban guardadas también se reducen a tamaño estándar.
+    // En segundo plano y sin bloquear la pantalla: es puramente local (no
+    // necesita señal) y en la mayoría de los arranques no encuentra nada que
+    // hacer, porque `shrinkStored` deja en paz lo que ya está bien.
+    compactLocalPhotos()
+      .then((r) => (r.fotos ? reload() : undefined))
+      .catch(() => {})
   }
 
   // ── Volver a la app = ponerse al día ───────────────────
@@ -763,6 +776,7 @@ export const useInspectionStore = defineStore('inspection', () => {
       lastSyncAt.value = new Date().toISOString()
       syncMessage.value =
         `Enviados ${res.pushed} · Fotos ${res.photos} · Recibidos ${res.pulled}` +
+        (res.photosRemoved ? ` · Fotos borradas ${res.photosRemoved}` : '') +
         // Omitidos = registros que tu rol no puede escribir en el servidor
         // (proyectos y estructuras si eres inspector). No es un error.
         (res.skipped ? ` · Omitidos ${res.skipped}` : '')
@@ -842,6 +856,52 @@ export const useInspectionStore = defineStore('inspection', () => {
     }
     findings.value = findings.value.filter((f) => f.id !== id)
     await db.findings.delete(id)
+  }
+
+  /**
+   * Quita fotos YA subidas de un hallazgo. Deja la lápida en Dexie para que el
+   * borrado llegue al servidor cuando haya señal (ver sync/photos.ts): sin eso,
+   * borrar sin conexión no borraba nada — el pull siguiente devolvía la foto.
+   */
+  async function removeStoredPhotos(findingId: string, remoteNames: string[]) {
+    if (!remoteNames.length) return
+    await trashPhotos(findingId, remoteNames)
+    if (await backend.isReachable()) await syncNow().catch(() => {})
+  }
+
+  /**
+   * Reduce a tamaño estándar las fotos que ya estaban guardadas: primero las de
+   * este dispositivo (base64 en IndexedDB, sin señal ni permisos) y después,
+   * si hay conexión, los archivos del servidor.
+   */
+  async function shrinkStoredPhotos() {
+    if (photoBusy.value) return
+    photoBusy.value = true
+    photoMessage.value = 'Reduciendo fotos…'
+    try {
+      const local = await compactLocalPhotos()
+      let remotas = 0
+      let omitidas = 0
+      if (authUser.value && (await backend.isReachable())) {
+        const r = await shrinkRemotePhotos((f) =>
+          canWorkOnStructure(structureOfInspection(f.inspectionId)),
+        )
+        remotas = r.fotos
+        omitidas = r.omitidas
+      }
+      await reload()
+      const mb = (local.bytes / 1048576).toFixed(1)
+      photoMessage.value =
+        local.fotos || remotas
+          ? `Reducidas ${local.fotos} en el dispositivo (${mb} MB liberados)` +
+            (remotas ? ` y ${remotas} en el servidor` : '') +
+            (omitidas ? ` · ${omitidas} sin cambiar` : '')
+          : 'Todas las fotos ya estaban a tamaño estándar.'
+    } catch (e) {
+      photoMessage.value = 'Error: ' + ((e as Error)?.message ?? String(e))
+    } finally {
+      photoBusy.value = false
+    }
   }
 
   /** Fija la clase de una irregularidad (0/1/2) en la estructura activa y persiste. */
@@ -1193,6 +1253,8 @@ export const useInspectionStore = defineStore('inspection', () => {
     testFormOpen,
     findingSheetId,
     findingSheet,
+    photoBusy,
+    photoMessage,
     photoViewer,
     sidebarOpen,
     authUser,
@@ -1294,6 +1356,8 @@ export const useInspectionStore = defineStore('inspection', () => {
     addFinding,
     updateFinding,
     removeFinding,
+    removeStoredPhotos,
+    shrinkStoredPhotos,
     addInspection,
     addTest,
     removeTest,

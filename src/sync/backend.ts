@@ -179,10 +179,27 @@ export const backend = {
     )
   },
 
-  /** Upsert por id (los ids son UUID generados en el cliente → estables). */
+  /**
+   * Upsert por id (los ids son UUID generados en el cliente → estables).
+   *
+   * Al ACTUALIZAR se omiten `team` y `author` cuando vienen vacíos. No es un
+   * detalle: el push manda el registro entero en cada sincronización, así que
+   * un dispositivo cuya copia local nunca supo del equipo —porque el proyecto
+   * se creó antes de que el equipo existiera— le borraba el equipo al registro
+   * del servidor. Y las reglas de lectura son
+   * `owner = @request.auth.id || es miembro del equipo del registro`: sin
+   * equipo, el proyecto desaparece para todo el resto del equipo mientras su
+   * dueño lo sigue viendo igual, que es el peor síntoma posible.
+   * Un campo ausente en un PATCH deja intacto lo que hay en el servidor.
+   *
+   * Al CREAR sí van, aunque estén vacíos: la regla de creación compara
+   * `@request.body.team = ""` y con el campo ausente no se cumple.
+   */
   async push(col: RemoteCollection, record: Record<string, unknown>): Promise<unknown> {
     try {
-      return await pb.collection(col).update(String(record.id), record)
+      const patch = { ...record }
+      for (const campo of ['team', 'author']) if (!patch[campo]) delete patch[campo]
+      return await pb.collection(col).update(String(record.id), patch)
     } catch {
       return await pb.collection(col).create(record)
     }
@@ -219,6 +236,20 @@ export const backend = {
     const fd = new FormData()
     fd.append('photos+', file) // '+' = agregar al campo multi-archivo
     return pb.collection('findings').update(findingId, fd)
+  },
+
+  /** Borra UNA foto del hallazgo. `photos-` quita por nombre de archivo; sin el
+   *  '-' se reemplazaría el campo entero y se perderían las demás. */
+  async deletePhoto(findingId: string, fileName: string): Promise<void> {
+    await pb.collection('findings').update(findingId, { 'photos-': [fileName] })
+  },
+
+  /** Baja el archivo de una foto (para poder reducirla y volver a subirla). */
+  async downloadPhoto(findingId: string, fileName: string): Promise<Blob> {
+    const url = pb.files.getURL({ id: findingId, collectionId: 'findings' }, fileName)
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`No se pudo bajar la foto (${res.status}).`)
+    return res.blob()
   },
 
   /** URL de un archivo (con thumbnail opcional, ej. '100x100'). */
