@@ -252,12 +252,15 @@ async function generateDocx() {
           </div>
           <div class="flex shrink-0 items-center gap-3 text-xs">
             <div class="hidden gap-1 sm:flex">
-              <img
-                v-for="p in f.photos.slice(0, 2)"
+              <button
+                v-for="(p, i) in f.photos.slice(0, 2)"
                 :key="p.id"
-                :src="p.dataUrl || p.url"
-                class="h-9 w-9 rounded object-cover"
-              />
+                class="h-9 w-9 overflow-hidden rounded hover:ring-2 hover:ring-brand-600"
+                title="Ver la foto completa"
+                @click="store.openPhotoViewer(f.photos, i, f.element + ' · ' + f.damageType)"
+              >
+                <img :src="p.dataUrl || p.url" class="h-full w-full object-cover" />
+              </button>
             </div>
             <div class="text-right">
               <div class="text-ink-400">Ext {{ f.extension }}% · Índice {{ findingIndex(f) }}</div>

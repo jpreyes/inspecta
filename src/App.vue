@@ -7,6 +7,8 @@ import Sidebar from './components/layout/Sidebar.vue'
 import TopBar from './components/layout/TopBar.vue'
 import TwinCanvas from './components/twin/TwinCanvas.vue'
 import InspectionSelector from './components/inspection/InspectionSelector.vue'
+import FindingSheet from './components/inspection/FindingSheet.vue'
+import PhotoViewer from './components/inspection/PhotoViewer.vue'
 import InspectionPanel from './components/inspection/InspectionPanel.vue'
 import ResultsView from './components/results/ResultsView.vue'
 import TestsView from './components/tests/TestsView.vue'
@@ -16,7 +18,7 @@ import TourOverlay from './components/tour/TourOverlay.vue'
 import LoginView from './components/auth/LoginView.vue'
 
 const store = useInspectionStore()
-const { ready, activeView, damageFormOpen, sidebarOpen, activeStructure, tourOpen, authUser } =
+const { ready, activeView, damageFormOpen, sidebarOpen, activeStructure, tourOpen, authUser, photoViewer } =
   storeToRefs(store)
 
 onMounted(() => store.init())
@@ -67,7 +69,7 @@ onMounted(() => store.init())
         <main class="relative min-w-0 flex-1 bg-ink-950">
           <TwinCanvas />
           <div class="pointer-events-none absolute inset-x-0 bottom-0 p-4">
-            <InspectionSelector class="pointer-events-auto" />
+            <InspectionSelector class="pointer-events-auto mx-auto max-w-3xl" />
           </div>
           <div
             class="pointer-events-none absolute left-4 top-4 hidden rounded-lg border border-ink-800 bg-ink-900/80 px-3 py-2 text-xs text-ink-400 backdrop-blur sm:block"
@@ -91,6 +93,16 @@ onMounted(() => store.init())
 
     <!-- Formulario "daño primero" (global, sobre cualquier vista) -->
     <DamageForm v-if="damageFormOpen" />
+
+    <!-- Ficha del hallazgo y visor de fotos: globales por el mismo motivo -->
+    <FindingSheet />
+    <PhotoViewer
+      v-if="photoViewer"
+      :photos="photoViewer.photos"
+      :start="photoViewer.index"
+      :caption="photoViewer.caption"
+      @close="store.closePhotoViewer()"
+    />
 
     <!-- Guía de la plataforma: se abre sola la primera vez -->
     <TourOverlay v-if="ready && authUser && tourOpen" />

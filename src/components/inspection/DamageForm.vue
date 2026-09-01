@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { Camera, X } from 'lucide-vue-next'
 import { useInspectionStore } from '../../stores/inspection'
+import { fileToPhotoDataUrl } from '../../ui/photo'
 import {
   catalogForScope,
   elementInfo,
@@ -146,15 +147,14 @@ watch(
   },
 )
 
+// La foto se guarda a tamaño estándar (HD), no como sale de la cámara: ver
+// src/ui/photo.ts — 12 MP por hallazgo llenan el navegador y no se suben nunca
+// desde terreno.
 async function onPhoto(ev: Event) {
   const files = (ev.target as HTMLInputElement).files
   if (!files) return
   for (const file of Array.from(files)) {
-    const dataUrl = await new Promise<string>((res) => {
-      const r = new FileReader()
-      r.onload = () => res(r.result as string)
-      r.readAsDataURL(file)
-    })
+    const dataUrl = await fileToPhotoDataUrl(file)
     form.photos.push({ id: 'ph-' + Math.random().toString(36).slice(2, 8), dataUrl, takenAt: new Date().toISOString() })
   }
   ;(ev.target as HTMLInputElement).value = ''
@@ -353,7 +353,14 @@ const textCls =
                el servidor y solo tienen su enlace. -->
           <div v-if="form.photos.length" class="flex gap-2 overflow-x-auto">
             <div v-for="(p, i) in form.photos" :key="p.id" class="relative shrink-0">
-              <img :src="p.dataUrl || p.url" class="h-14 w-14 rounded object-cover" />
+              <button
+                type="button"
+                class="h-14 w-14 overflow-hidden rounded hover:ring-2 hover:ring-brand-600"
+                title="Ver la foto completa"
+                @click="store.openPhotoViewer(form.photos, i)"
+              >
+                <img :src="p.dataUrl || p.url" class="h-full w-full object-cover" />
+              </button>
               <!-- Solo se quitan las fotos que aún NO subieron. Una ya subida
                    vive en el servidor: sacarla de la lista local no la borra de
                    allá y el siguiente pull la devuelve, así que el botón sería

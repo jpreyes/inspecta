@@ -100,7 +100,11 @@ function step(dir: number) {
 </script>
 
 <template>
-  <div data-tour="campaigns" class="mx-auto max-w-3xl rounded-xl border border-ink-800 bg-ink-900/85 p-3 backdrop-blur">
+  <!-- Sin ancho propio: lo pone quien lo usa. En la lista y en los ensayos tiene
+       que medir lo mismo que la tabla —un bloque más angosto encima de otro más
+       ancho se lee como si fueran de dos pantallas distintas—; sobre el gemelo
+       3D flota centrado y ahí sí conviene limitarlo (ver App.vue). -->
+  <div data-tour="campaigns" class="rounded-xl border border-ink-800 bg-ink-900/85 p-3 backdrop-blur">
     <div class="mb-2 flex items-center justify-between">
       <div class="flex items-center gap-2 text-xs text-ink-400">
         <CalendarDays :size="14" />

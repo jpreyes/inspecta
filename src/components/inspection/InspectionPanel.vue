@@ -51,7 +51,15 @@ function register() {
         Sin hallazgos {{ selectedElement ? 'en este elemento' : 'en esta campaña' }}.
       </div>
 
-      <div v-for="f in list" :key="f.id" class="mb-2 rounded-lg border border-ink-800 bg-ink-850 p-3">
+      <!-- La tarjeta abre la ficha completa; el panel es angosto y acá solo cabe
+           el titular del hallazgo. -->
+      <div
+        v-for="f in list"
+        :key="f.id"
+        class="mb-2 cursor-pointer rounded-lg border border-ink-800 bg-ink-850 p-3 hover:border-ink-700"
+        title="Ver la ficha del daño"
+        @click="store.openFindingSheet(f.id)"
+      >
         <div class="flex items-start justify-between">
           <div class="flex items-center gap-2">
             <component :is="iconForDamage(f.damageType)" :size="16" class="text-ink-300" />
@@ -74,7 +82,15 @@ function register() {
         <p v-if="f.notes" class="mt-2 text-xs text-ink-300">{{ f.notes }}</p>
 
         <div v-if="f.photos.length" class="mt-2 flex gap-2 overflow-x-auto">
-          <img v-for="p in f.photos" :key="p.id" :src="p.dataUrl || p.url" class="h-16 w-16 shrink-0 rounded object-cover" />
+          <button
+            v-for="(p, i) in f.photos"
+            :key="p.id"
+            class="h-16 w-16 shrink-0 overflow-hidden rounded hover:ring-2 hover:ring-brand-600"
+            title="Ver la foto completa"
+            @click.stop="store.openPhotoViewer(f.photos, i, f.element + ' · ' + f.damageType)"
+          >
+            <img :src="p.dataUrl || p.url" class="h-full w-full object-cover" />
+          </button>
         </div>
 
         <div class="mt-2 flex items-center justify-between">
@@ -83,13 +99,13 @@ function register() {
           <div v-if="canWorkHere" class="flex items-center gap-3">
             <button
               class="flex items-center gap-1 text-[11px] text-ink-500 hover:text-brand-500"
-              @click="store.editFinding(f.id)"
+              @click.stop="store.editFinding(f.id)"
             >
               <Pencil :size="12" /> Editar
             </button>
             <button
               class="flex items-center gap-1 text-[11px] text-ink-500 hover:text-red-400"
-              @click="store.removeFinding(f.id)"
+              @click.stop="store.removeFinding(f.id)"
             >
               <Trash2 :size="12" /> Eliminar
             </button>

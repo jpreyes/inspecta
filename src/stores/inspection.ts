@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import type {
   Finding,
   Inspection,
+  Photo,
   Project,
   Severity,
   Structure,
@@ -93,6 +94,12 @@ export const useInspectionStore = defineStore('inspection', () => {
   // abre también desde la lista de daños, que es otra vista: en terreno el
   // ensayo y el daño se registran en la misma pasada.
   const testFormOpen = ref(false)
+
+  // Ficha del hallazgo (solo lectura) y visor de fotos. Los dos son globales:
+  // se abren desde la tabla, desde el panel del gemelo y desde el formulario,
+  // así que el estado no puede vivir dentro de ninguno de ellos.
+  const findingSheetId = ref<string | null>(null)
+  const photoViewer = ref<{ photos: Photo[]; index: number; caption?: string } | null>(null)
 
   // ── Sync / autenticación (PocketBase) ──────────────────
   const authUser = ref<RemoteUser | null>(backend.user)
@@ -597,6 +604,25 @@ export const useInspectionStore = defineStore('inspection', () => {
   const damageFormFinding = computed(
     () => findings.value.find((f) => f.id === damageFormFindingId.value) ?? null,
   )
+
+  /** Abre la ficha de un hallazgo (la tabla es un resumen; acá está entero). */
+  function openFindingSheet(id: string) {
+    findingSheetId.value = id
+  }
+  function closeFindingSheet() {
+    findingSheetId.value = null
+  }
+  const findingSheet = computed(
+    () => findings.value.find((f) => f.id === findingSheetId.value) ?? null,
+  )
+
+  function openPhotoViewer(photos: Photo[], index = 0, caption?: string) {
+    if (!photos.length) return
+    photoViewer.value = { photos, index, caption }
+  }
+  function closePhotoViewer() {
+    photoViewer.value = null
+  }
 
   /** Abre el formulario de ensayo, cambiando de vista si hace falta. */
   function openTestForm() {
@@ -1165,6 +1191,9 @@ export const useInspectionStore = defineStore('inspection', () => {
     damageFormFindingId,
     damageFormFinding,
     testFormOpen,
+    findingSheetId,
+    findingSheet,
+    photoViewer,
     sidebarOpen,
     authUser,
     syncing,
@@ -1251,6 +1280,10 @@ export const useInspectionStore = defineStore('inspection', () => {
     closeDamageForm,
     openTestForm,
     closeTestForm,
+    openFindingSheet,
+    closeFindingSheet,
+    openPhotoViewer,
+    closePhotoViewer,
     login,
     logout,
     syncNow,

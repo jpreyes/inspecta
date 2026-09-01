@@ -163,11 +163,16 @@ const photosOf = (f: Finding) => f.photos.slice(0, 3)
               </tr>
             </thead>
             <tbody class="divide-y divide-ink-800">
+              <!-- La fila entera abre la ficha: la tabla recorta las
+                   observaciones y encoge las fotos, así que para MIRAR un daño
+                   hacía falta abrirlo en el formulario de edición. -->
               <tr
                 v-for="f in g.rows"
                 :key="f.id"
                 :data-finding="f.id"
-                class="bg-ink-900/50 hover:bg-ink-850"
+                class="cursor-pointer bg-ink-900/50 hover:bg-ink-850"
+                title="Ver la ficha del daño"
+                @click="store.openFindingSheet(f.id)"
               >
                 <td class="px-3 py-2 font-medium text-ink-100">
                   {{ f.element }}
@@ -197,12 +202,18 @@ const photosOf = (f: Finding) => f.photos.slice(0, 3)
                 <td class="px-3 py-2 text-right text-ink-400">{{ f.extension }}%</td>
                 <td class="px-3 py-2">
                   <div v-if="f.photos.length" class="flex gap-1">
-                    <img
-                      v-for="p in photosOf(f)"
+                    <button
+                      v-for="(p, i) in photosOf(f)"
                       :key="p.id"
-                      :src="p.dataUrl || p.url"
-                      class="h-8 w-8 rounded object-cover"
-                    />
+                      class="h-8 w-8 overflow-hidden rounded hover:ring-2 hover:ring-brand-600"
+                      title="Ver la foto completa"
+                      @click.stop="store.openPhotoViewer(f.photos, i, f.element + ' · ' + f.damageType)"
+                    >
+                      <img :src="p.dataUrl || p.url" class="h-full w-full object-cover" />
+                    </button>
+                    <span v-if="f.photos.length > 3" class="self-center text-[10px] text-ink-600">
+                      +{{ f.photos.length - 3 }}
+                    </span>
                   </div>
                   <span v-else class="text-[11px] text-ink-600">—</span>
                 </td>
@@ -220,7 +231,7 @@ const photosOf = (f: Finding) => f.photos.slice(0, 3)
                       class="text-ink-600 hover:text-brand-500"
                       title="Editar"
                       aria-label="Editar hallazgo"
-                      @click="store.editFinding(f.id)"
+                      @click.stop="store.editFinding(f.id)"
                     >
                       <Pencil :size="14" />
                     </button>
@@ -229,7 +240,7 @@ const photosOf = (f: Finding) => f.photos.slice(0, 3)
                       class="text-ink-600 hover:text-red-400"
                       title="Eliminar"
                       aria-label="Eliminar hallazgo"
-                      @click="store.removeFinding(f.id)"
+                      @click.stop="store.removeFinding(f.id)"
                     >
                       <Trash2 :size="14" />
                     </button>
