@@ -4,11 +4,12 @@ import { storeToRefs } from 'pinia'
 import { Camera, X } from 'lucide-vue-next'
 import { useInspectionStore } from '../../stores/inspection'
 import {
-  catalogFor,
+  catalogForScope,
   elementInfo,
   damagesForMaterial,
   causesForDamage,
   SEVERITY,
+  type DamageScope,
   type Photo,
   type Severity,
 } from '../../types/inspection'
@@ -22,7 +23,12 @@ const linkedElement = computed(() =>
   activeStructure.value?.elements.find((e) => e.id === damageFormElementId.value) ?? null,
 )
 
-const cat = computed(() => catalogFor(activeStructure.value?.type))
+// Ámbito del hallazgo. Lo NO estructural (cielos, cristales, revestimientos,
+// barandas, instalaciones) se registra igual y sale en el informe, pero no
+// entra en la calificación: cambiarlo cambia el catálogo completo del
+// formulario, porque los deterioros y las causas son otros.
+const scope = ref<DamageScope>('estructural')
+const cat = computed(() => catalogForScope(activeStructure.value?.type, scope.value))
 const severities = [1, 2, 3, 4, 0] as Severity[]
 
 const form = reactive({
@@ -64,6 +70,11 @@ const saving = ref(false)
 // defaults + resets en cascada
 form.component = components.value[0]?.component ?? ''
 form.element = elementOptions.value[0]?.element ?? ''
+watch(scope, () => {
+  form.component = components.value[0]?.component ?? ''
+  form.element = elementOptions.value[0]?.element ?? ''
+  form.elementOther = ''
+})
 watch(
   () => form.component,
   () => {
@@ -117,6 +128,7 @@ async function submit() {
     cause: causeValue.value || undefined,
     severity: form.severity,
     extension: form.extension,
+    nonStructural: scope.value === 'no-estructural',
     notes: form.notes,
   })
   if (f && form.photos.length) await store.updateFinding(f.id, { photos: [...form.photos] })
@@ -138,6 +150,7 @@ const textCls =
           <p class="text-[11px] text-ink-500">
             {{ activeStructure?.name }} · campaña {{ activeInspection?.date }}
             <span v-if="linkedElement" class="text-brand-500">· elemento {{ linkedElement.tag }}</span>
+            <span v-if="scope === 'no-estructural'" class="text-amber-400">· no estructural</span>
           </p>
         </div>
         <!-- El área tocable va más allá del ícono: 18px son incómodos con el dedo. -->
@@ -151,6 +164,32 @@ const textCls =
       </div>
 
       <form class="space-y-3 p-4" @submit.prevent="submit">
+        <!-- Ámbito: manda el catálogo entero y decide si el daño califica -->
+        <div>
+          <div class="flex rounded-lg border border-ink-700 bg-ink-950 p-0.5 text-xs">
+            <button
+              v-for="s in ([
+                { v: 'estructural', label: 'Estructural' },
+                { v: 'no-estructural', label: 'No estructural' },
+              ] as const)"
+              :key="s.v"
+              type="button"
+              class="min-h-9 flex-1 rounded-md px-3 font-medium transition-colors"
+              :class="
+                scope === s.v ? 'bg-brand-600 text-ink-950' : 'text-ink-400 hover:text-ink-200'
+              "
+              @click="scope = s.v"
+            >
+              {{ s.label }}
+            </button>
+          </div>
+          <p v-if="scope === 'no-estructural'" class="mt-1.5 text-[11px] leading-snug text-ink-500">
+            Cielos, revestimientos, cristales, barandas, cubierta, instalaciones… Queda
+            registrado y sale en el informe, pero <span class="text-ink-300">no entra en la
+            condición estructural</span>.
+          </p>
+        </div>
+
         <!-- Componente + Elemento -->
         <div class="grid grid-cols-2 gap-3">
           <div>

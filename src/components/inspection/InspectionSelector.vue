@@ -69,9 +69,21 @@ async function createInspection() {
   }
 }
 
+const campaign = (id: string) => conditionByCampaign.value.find((x) => x.id === id)
 const conditionColor = (id: string) => {
-  const c = conditionByCampaign.value.find((x) => x.id === id)
+  const c = campaign(id)
   return c ? CONDITION[c.key].color : '#334155'
+}
+/** Cuánto trabajo tiene registrado esa campaña. Se muestra en la pill porque la
+ *  app abre una sola campaña: sin el número, el trabajo de otra visita —o el que
+ *  acaba de subir otra persona— parece no existir. */
+const workload = (id: string) => {
+  const c = campaign(id)
+  if (!c) return ''
+  const parts = []
+  if (c.findings) parts.push(`${c.findings} daño${c.findings === 1 ? '' : 's'}`)
+  if (c.tests) parts.push(`${c.tests} ensayo${c.tests === 1 ? '' : 's'}`)
+  return parts.join(' · ')
 }
 
 function fmt(d: string) {
@@ -201,6 +213,13 @@ function step(dir: number) {
         >
           <span class="h-2 w-2 rounded-full" :style="{ background: conditionColor(insp.id) }" />
           {{ fmt(insp.date) }}
+          <span
+            v-if="campaign(insp.id)?.findings || campaign(insp.id)?.tests"
+            class="rounded-full bg-ink-700/60 px-1.5 text-[10px] font-semibold text-ink-300"
+            :title="workload(insp.id)"
+          >
+            {{ (campaign(insp.id)?.findings ?? 0) + (campaign(insp.id)?.tests ?? 0) }}
+          </span>
         </button>
       </div>
 

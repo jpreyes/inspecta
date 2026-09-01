@@ -42,13 +42,30 @@ Un botón **Nuevo daño** abre un formulario en cascada: Componente → Elemento
 **fotos** (cámara → base64). Si se abre desde el gemelo, el hallazgo queda atado al
 elemento 3D (colorea la malla).
 
+**Estructural vs. no estructural.** El formulario abre con un selector de ámbito que
+cambia el catálogo completo. `src/data/nonstructural.ts` cubre lo que no resiste pero
+igual hay que inspeccionar: tabiques y cielos, revestimientos y fachada, cubierta y
+aguas lluvias, ventanas y cristales, barandas y terminaciones, instalaciones y equipos
+anclados, y el exterior. Esos hallazgos **se registran, se fotografían y salen en el
+informe, pero no entran en la calificación** — es la separación de ATC-20 / EMS-98, y
+ahora aplica a todo tipo de estructura (antes solo excluía `Tabique` y
+`Antepecho / parapeto`, y solo en edificio).
+
+El ámbito se guarda **explícito** en `Finding.nonStructural`, no se deduce del nombre:
+cada campo admite "Otro…" y un "Cielo americano del hall" escrito a mano no calzaría
+con ninguna lista. Los hallazgos anteriores al campo sí se resuelven por nombre
+(`NONSTRUCT_BY_NAME`), y el push los normaliza al subir.
+
 ### Condición (índice de salud 0–100, 100 = sano)
 `src/types/inspection.ts`. Modelo jerárquico hallazgo → elemento → estructura, con dos
 agregadores:
 - **Edificio** (redundante): promedio ponderado por importancia + override por elemento
-  primario + **agregación por piso** (concentración tipo piso blando gobierna). Los
-  elementos **no estructurales** (tabiques) no afectan la condición estructural.
+  primario + **agregación por piso** (concentración tipo piso blando gobierna).
 - **Puente** (serie): peor-caso más fuerte.
+
+Los hallazgos **no estructurales se descartan de entrada**, en `inspectionScore` y para
+cualquier tipo de estructura. Antes el filtro vivía dentro del roll-up de edificio, así
+que en puente no aplicaba; y reconocía solo dos nombres de elemento.
 
 La causa no entra en la condición: alimenta la **prioridad de intervención**
 (`findingPriority` = daño × riesgo de la causa). Inspirado en España (G·K1·K2),
@@ -65,9 +82,40 @@ agregan en un índice (su peligrosidad depende del sismo y de un análisis).
 de suelo DS61, categoría de ocupación NCh433). **Riesgo = matriz(condición × amenaza)**.
 
 ### Gemelo digital 3D (opcional)
-Pórtico paramétrico (TresJS) generado desde grilla; cada elemento se colorea por su
-severidad vigente en la campaña seleccionada. Estructuras sin modelo 3D se trabajan por
-lista/jerarquía.
+Dos orígenes, y **los dos se pueden poner en cualquier momento** desde el editor de la
+estructura (antes la casilla solo existía al crear, y solo para edificios: quien no la
+marcaba se quedaba sin 3D para siempre):
+
+- **Pórtico paramétrico** generado desde una grilla (vanos X/Z, pisos).
+- **Modelo importado** desde **IFC** o **glTF/GLB** (`src/model/`).
+
+Un modelo importado se dibuja con su **geometría real** (TresJS `<primitive>`), no como
+cajas. Cada malla lleva `userData.elementId`, que es el puente con la capa semántica:
+sin él el modelo sería una foto y no habría a qué colgarle un hallazgo.
+
+| | IFC (`web-ifc`) | glTF / GLB (`GLTFLoader`) |
+|---|---|---|
+| De dónde sale | Revit, ArchiCAD, Tekla, BlenderBIM | Blender, SketchUp, Rhino |
+| Tipo de elemento | lo **declara** el archivo (IfcColumn, IfcBeam, IfcSlab, IfcWall, IfcFooting…) | se deduce del **nombre** del objeto (`src/model/naming.ts`) |
+| Piso | de la estructura espacial (`IfcRelContainedInSpatialStructure` → `IfcBuildingStorey`, ordenados por cota) | se estima por la altura del centro |
+| Peso | ~3,5 MB de JS + 1,3 MB de WASM, con `import()` dinámico | ~46 kB, ya viene en `three` |
+
+**Tres cosas medidas, no supuestas** (ver `scripts/check-model-import.mjs`):
+
+1. **web-ifc ya normaliza a metros.** Un IFC declarado en milímetros devolvió un pilar
+   de 400×3200 mm como `0.40 × 3.20`. Aplicarle además el factor del `IfcUnitAssignment`
+   lo encogía 1000 veces y dejaba el edificio del porte de una moneda. No se convierten
+   unidades a mano; solo queda una comprobación de tamaño como red de seguridad.
+2. **Los contenedores espaciales entran como mallas.** De 7 "mallas" de un IFC de
+   prueba, 3 eran `IfcSite`, `IfcBuilding` e `IfcBuildingStorey` con caja de tamaño cero.
+   Sin filtrarlos aparecían en el árbol como elementos fantasma llamados "Edificio".
+3. **El archivo NO se baja en el sync.** Un IFC son megabytes que en terreno se pagan
+   con datos móviles, así que la descarga es bajo demanda (`ensureModelFile`) al abrir de
+   verdad la vista 3D; después queda en IndexedDB y funciona sin señal. Por lo mismo
+   web-ifc queda fuera del precache del service worker: importar necesita conexión la
+   primera vez, el gemelo ya importado no.
+
+Estructuras sin modelo 3D se trabajan por lista/jerarquía, como siempre.
 
 ### Campañas periódicas
 Selector de inspecciones (visitas discretas). Al elegir una, el gemelo/lista muestran el
@@ -77,7 +125,12 @@ estado *a esa fecha* → permite comparar la **evolución entre inspecciones**.
 - Proyectos y estructuras (crear/editar/eliminar en el sidebar, borrado en cascada).
 - Inspecciones y ensayos (esclerometría, carbonatación…), con **atajos de ensayos
   frecuentes** (`src/data/tests.ts`) que rellenan método y norma para que el inspector
-  solo escriba laboratorio, muestra y resultado.
+  solo escriba laboratorio, muestra y resultado. Los ensayos tienen **vista propia** en
+  la barra superior (`src/components/tests/TestsView.vue`): antes vivían al final de
+  Resultados, y para agregar una esclerometría había que cambiar de vista y bajar por
+  toda la pantalla de KPIs — con el teléfono en una mano, en terreno, simplemente no se
+  registraban. La vista trae también el selector de campañas, porque un ensayo cuelga de
+  una campaña y lo primero que falta suele ser la campaña del año.
 - Vista de **Resultados** "de una sola mirada": KPIs, distribución por severidad,
   evolución por campaña, riesgo/vulnerabilidad/sitio, hallazgos priorizados y ensayos.
 - **Informe Word (.docx)** generado en el cliente (`src/report/docx.ts`).
@@ -99,6 +152,27 @@ anterior se borran (son de otra persona).
 Todo vive en IndexedDB; la app funciona 100% sin señal mientras la sesión esté vigente.
 El backend PocketBase es la fuente de los datos y la capa de sync/compartir. La web habla siempre al mismo origen `/api`, así que
 servir `dist/` desde `pb_public/` no requiere cambios de código. Ver `DEPLOY.md`.
+
+**El trabajo del equipo llega solo** (`src/sync/realtime.ts`). El sync es una corrida
+puntual: sirve para ponerse al día, pero dejaba un hueco de operación — mientras una
+inspectora registraba daños en terreno, quien tenía la app abierta no veía nada hasta
+volver a entrar. Ahora hay una suscripción SSE a `/api/realtime` sobre las cinco
+colecciones, y al volver la app al primer plano (o al recuperar la conexión) se
+resincroniza, estrangulado a una vez por minuto. La lista muestra **En vivo** cuando la
+escucha está abierta y **Sin conexión** cuando no.
+
+Dos cosas que un `put` a secas rompía, y por eso el pull y el tiempo real pasan por
+`src/sync/apply.ts`:
+
+- **Las fotos sin subir.** El registro remoto solo conoce los archivos que ya están en
+  PocketBase; guardarlo encima borraba la foto tomada sin señal antes de que subiera.
+- **El gemelo recién importado.** Entre importarlo y que el archivo suba, el servidor
+  tiene el metadato pero no el archivo y devuelve la estructura sin modelo: guardarlo
+  destruía la geometría local y dejaba el blob huérfano, sin nada que lo resubiera.
+
+La app abre **una campaña a la vez**, así que el trabajo registrado en otra campaña se ve
+igual que si no existiera. Por eso cada fecha del selector lleva el número de daños y
+ensayos que tiene, y la lista avisa cuántos hallazgos hay en otras campañas.
 
 El push **filtra por permiso antes de enviar** (`src/sync/engine.ts`): el pull baja los
 proyectos y estructuras del equipo, que un inspector no puede escribir, y devolverlos
@@ -194,20 +268,25 @@ src/
   data/tests.ts             # atajos de ensayos frecuentes (tipo/método/norma)
   data/tour.ts              # pasos de la guía guiada
   data/seed.ts              # datos demo (ids fijos: nunca se sincronizan)
-  db/index.ts               # Dexie / IndexedDB (offline)
+  db/index.ts               # Dexie / IndexedDB (offline; incluye el archivo del gemelo)
+  data/nonstructural.ts     # catálogo de elementos NO estructurales (no califican)
+  model/                    # importación del gemelo: ifc.ts · gltf.ts · naming.ts
   stores/inspection.ts      # store Pinia
   report/docx.ts            # informe Word
-  sync/                     # capa PocketBase (opcional)
+  sync/                     # capa PocketBase: backend · engine · realtime · apply · mappers
   ui/icons.ts, damage-icons.ts   # íconos de daño (SVG propios)
   components/
     layout/{TopBar,Sidebar}.vue
     team/TeamPanel.vue        # equipo activo, miembros, invitar, roles
     tour/TourOverlay.vue      # guía guiada (spotlight + tarjeta por paso)
-    twin/TwinCanvas.vue
+    tests/TestsView.vue       # ensayos de la campaña (vista propia)
+    twin/TwinCanvas.vue       # gemelo: cajas paramétricas o geometría importada
     list/DamageListView.vue
     results/{ResultsView,VulnerabilityPanel}.vue
     inspection/{InspectionSelector,InspectionPanel,DamageForm}.vue
 scripts/
   build_catalog_ts.py       # genera data/catalog.ts
   calibrate.ts              # banco de calibración del scoring
+  check-views.mjs           # QA: vistas, tiempo real y ámbito del formulario
+  check-model-import.mjs    # QA: importa fixtures/edificio.ifc por la interfaz
 ```

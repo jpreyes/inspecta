@@ -12,6 +12,8 @@
 // centrada: el texto sigue sirviendo aunque no haya nada que iluminar.
 // ─────────────────────────────────────────────────────────────
 
+import type { AppView } from '../stores/inspection'
+
 export interface TourStep {
   id: string
   title: string
@@ -21,7 +23,7 @@ export interface TourStep {
   /** Elemento a iluminar. Sin `target`, la tarjeta va centrada. */
   target?: string
   /** Vista que debe estar activa para que el paso tenga sentido. */
-  view?: 'list' | 'twin' | 'results'
+  view?: AppView
   /** Abre el menú lateral (en móvil es un cajón deslizante). */
   openSidebar?: boolean
 }
@@ -76,9 +78,9 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     id: 'vistas',
-    title: 'Las tres vistas',
+    title: 'Las vistas',
     body:
-      'Lista es la tabla de daños de la campaña y el lugar donde se trabaja. Resultados resume la condición, el riesgo, los ensayos y el informe. Gemelo 3D aparece solo en estructuras que tienen modelo tridimensional.',
+      'Lista es la tabla de daños de la campaña y el lugar donde se trabaja. Ensayos registra los ensayos de la visita. Resultados resume la condición, el riesgo y el informe. Gemelo 3D aparece solo en estructuras que tienen modelo tridimensional.',
     target: '[data-tour="views"]',
   },
   {
@@ -145,7 +147,7 @@ export const TOUR_STEPS: TourStep[] = [
       'Los ensayos quedan en el informe Word junto a los daños.',
     ],
     target: '[data-tour="tests"]',
-    view: 'results',
+    view: 'tests',
   },
   {
     id: 'informe',

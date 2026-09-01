@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { Printer, FlaskConical, FileText, Plus, Trash2 } from 'lucide-vue-next'
+import { Printer, FlaskConical, FileText, ArrowRight } from 'lucide-vue-next'
 import { useInspectionStore } from '../../stores/inspection'
 import { iconForDamage } from '../../ui/icons'
 import { CONDITION, SEVERITY, findingIndex, findingPriority, type Severity } from '../../types/inspection'
 import VulnerabilityPanel from './VulnerabilityPanel.vue'
-import { TEST_PRESETS, type TestPreset } from '../../data/tests'
 
 const store = useInspectionStore()
 const {
@@ -67,48 +66,6 @@ function viewIn3D(elementId?: string) {
 }
 function printReport() {
   window.print()
-}
-
-// Ensayos: alta/baja
-const showNewTest = ref(false)
-const testDraft = reactive({
-  testType: '',
-  method: '',
-  standard: '',
-  executedAt: '',
-  laboratory: '',
-  sampleLocation: '',
-  resultSummary: '',
-})
-/** Ejemplo de resultado del ensayo elegido (placeholder del campo). */
-const resultHint = ref('')
-
-function openNewTest() {
-  Object.assign(testDraft, { testType: '', method: '', standard: '', laboratory: '', sampleLocation: '', resultSummary: '' })
-  testDraft.executedAt = activeInspection.value?.date ?? new Date().toISOString().slice(0, 10)
-  resultHint.value = ''
-  showNewTest.value = true
-}
-
-/** Atajo: rellena tipo, método y norma; el resto lo pone el inspector. */
-function applyPreset(p: TestPreset) {
-  testDraft.testType = p.testType
-  testDraft.method = p.method
-  testDraft.standard = p.standard === '—' ? '' : p.standard
-  resultHint.value = p.resultHint
-}
-async function createTest() {
-  if (!testDraft.testType.trim() || !testDraft.resultSummary.trim()) return
-  await store.addTest({
-    testType: testDraft.testType.trim(),
-    method: testDraft.method.trim() || undefined,
-    standard: testDraft.standard.trim() || undefined,
-    executedAt: testDraft.executedAt,
-    laboratory: testDraft.laboratory.trim() || undefined,
-    sampleLocation: testDraft.sampleLocation.trim() || undefined,
-    resultSummary: testDraft.resultSummary.trim(),
-  })
-  showNewTest.value = false
 }
 
 const generating = ref(false)
@@ -324,73 +281,31 @@ async function generateDocx() {
       </div>
     </div>
 
-    <!-- Ensayos -->
-    <div data-tour="tests" class="rounded-xl border border-ink-800 bg-ink-900">
+    <!-- Ensayos: acá se resumen; se registran en su propia vista (antes el
+         formulario vivía enterrado al final de esta pantalla). -->
+    <div class="rounded-xl border border-ink-800 bg-ink-900">
       <div class="flex items-center justify-between border-b border-ink-800 px-4 py-3">
-        <h2 class="text-sm font-semibold text-ink-200">Ensayos</h2>
+        <h2 class="text-sm font-semibold text-ink-200">
+          Ensayos <span class="text-ink-600">· {{ currentTests.length }}</span>
+        </h2>
         <button
-          v-if="activeInspection && canWorkHere"
           class="flex items-center gap-1 rounded-md border border-ink-700 px-2 py-1 text-xs text-ink-300 hover:bg-ink-800"
-          @click="showNewTest ? (showNewTest = false) : openNewTest()"
+          @click="store.setView('tests')"
         >
-          <Plus :size="13" /> Nuevo ensayo
+          {{ canWorkHere ? 'Agregar ensayo' : 'Ver ensayos' }} <ArrowRight :size="13" />
         </button>
       </div>
 
-      <!-- formulario nuevo ensayo -->
-      <form v-if="showNewTest" class="grid gap-2 border-b border-ink-800 p-4 sm:grid-cols-2" @submit.prevent="createTest">
-        <!-- Atajos de ensayos frecuentes -->
-        <div class="flex flex-wrap gap-1.5 sm:col-span-2">
-          <button
-            v-for="p in TEST_PRESETS"
-            :key="p.testType"
-            type="button"
-            class="rounded-full border px-2 py-0.5 text-[11px] transition-colors"
-            :class="
-              testDraft.testType === p.testType
-                ? 'border-brand-600 bg-brand-600/15 text-ink-100'
-                : 'border-ink-700 text-ink-400 hover:bg-ink-800'
-            "
-            :title="p.standard === '—' ? p.method : p.method + ' · ' + p.standard"
-            @click="applyPreset(p)"
-          >
-            {{ p.testType }}
-          </button>
-        </div>
-        <input v-model="testDraft.testType" placeholder="Tipo (ej. Esclerometría)" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200" />
-        <input v-model="testDraft.executedAt" type="date" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200" />
-        <input v-model="testDraft.method" placeholder="Método" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200" />
-        <input v-model="testDraft.standard" placeholder="Norma (ej. NCh1565)" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200" />
-        <input v-model="testDraft.laboratory" placeholder="Laboratorio" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200" />
-        <input v-model="testDraft.sampleLocation" placeholder="Ubicación de la muestra" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200" />
-        <textarea v-model="testDraft.resultSummary" rows="2" :placeholder="resultHint ? 'Resultado, ej. ' + resultHint : 'Resultado / resumen'" class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-xs text-ink-200 sm:col-span-2" />
-        <div class="flex gap-2 sm:col-span-2">
-          <button type="submit" class="rounded-md bg-brand-600 px-3 py-1.5 text-xs font-medium text-ink-950 hover:bg-brand-500 disabled:opacity-50" :disabled="!testDraft.testType.trim() || !testDraft.resultSummary.trim()">Guardar</button>
-          <button type="button" class="rounded-md border border-ink-700 px-2 py-1.5 text-xs text-ink-300" @click="showNewTest = false">Cancelar</button>
-        </div>
-      </form>
-
-      <div v-if="!currentTests.length && !showNewTest" class="px-4 py-8 text-center text-sm text-ink-500">
+      <div v-if="!currentTests.length" class="px-4 py-8 text-center text-sm text-ink-500">
         Sin ensayos registrados en esta campaña.
       </div>
       <div v-else class="divide-y divide-ink-800">
-        <div v-for="t in currentTests" :key="t.id" class="group px-4 py-3">
+        <div v-for="t in currentTests" :key="t.id" class="px-4 py-3">
           <div class="flex items-center justify-between">
             <span class="flex items-center gap-2 text-sm font-medium text-ink-100">
               <FlaskConical :size="15" class="text-ink-400" /> {{ t.testType }}
             </span>
-            <div class="flex items-center gap-3">
-              <span class="text-xs text-ink-500">{{ fmt(t.executedAt) }}</span>
-              <button
-                v-if="canWorkHere"
-                class="text-ink-600 opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
-                title="Eliminar ensayo"
-                aria-label="Eliminar ensayo"
-                @click="store.removeTest(t.id)"
-              >
-                <Trash2 :size="14" />
-              </button>
-            </div>
+            <span class="text-xs text-ink-500">{{ fmt(t.executedAt) }}</span>
           </div>
           <div class="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-ink-400">
             <span v-if="t.method">Método: {{ t.method }}</span>

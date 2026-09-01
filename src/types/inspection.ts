@@ -3,6 +3,7 @@
 // Jerarquía:  Proyecto ▸ Estructura ▸ Elemento ▸ (Inspección ▸ Hallazgo)
 // ─────────────────────────────────────────────────────────────
 import { CATALOG, type CatalogElement, type StructureCatalog } from '../data/catalog'
+import { NONSTRUCTURAL_CATALOG } from '../data/nonstructural'
 import type { SiteConfig } from '../data/hazard'
 
 export { CATALOG, MATERIALS } from '../data/catalog'
@@ -30,9 +31,19 @@ export const SEVERITY: Record<Severity, SeverityMeta> = {
 // El catálogo (componentes → elementos → materiales/zonas, deterioros, causas)
 // vive en src/data/catalog.ts. "Otro" en cada campo permite texto libre.
 
+/** Ámbito del hallazgo: la parte resistente, o todo lo demás que igual hay que
+ *  registrar (cielos, cristales, revestimientos, instalaciones…). */
+export type DamageScope = 'estructural' | 'no-estructural'
+
 /** Catálogo aplicable al tipo de estructura (fallback: edificio). */
 export function catalogFor(type?: string): StructureCatalog {
   return (type && CATALOG[type]) || CATALOG.edificio
+}
+
+/** Catálogo según el ámbito. Lo no estructural es UNO SOLO para todo tipo de
+ *  estructura: los cielos y barandas de un edificio son los de una nave. */
+export function catalogForScope(type: string | undefined, scope: DamageScope): StructureCatalog {
+  return scope === 'no-estructural' ? NONSTRUCTURAL_CATALOG : catalogFor(type)
 }
 /** Info (materiales + zonas) de un elemento del catálogo. */
 export function elementInfo(cat: StructureCatalog, element: string): CatalogElement | undefined {
@@ -54,7 +65,11 @@ export function causesForDamage(cat: StructureCatalog, damage: string): string[]
   return cat.causesByDamage[damage] ?? []
 }
 
-export type ElementType = 'columna' | 'viga' | 'losa' | 'muro' | 'nudo' | 'fundacion'
+// 'otro' existe por los modelos importados: un IFC trae escaleras, barandas,
+// ventanas y equipos, y un glTF de Blender puede traer objetos con cualquier
+// nombre. Descartarlos empobrecería el gemelo —y justo ahí viven los daños no
+// estructurales—, así que entran con tipo genérico.
+export type ElementType = 'columna' | 'viga' | 'losa' | 'muro' | 'nudo' | 'fundacion' | 'otro'
 
 export type StructureType = 'edificio' | 'puente' | 'nave' | 'torre'
 
@@ -94,6 +109,19 @@ export interface Structure {
     storyH: number // altura de piso (m)
   }
   elements: Element[]
+  /** Modelo 3D importado (IFC o glTF). Alternativa a `grid`: el pórtico
+   *  paramétrico se genera, este se carga. Los dos producen `elements`; la
+   *  diferencia es que acá además hay un ARCHIVO con la geometría real, que
+   *  vive en el volumen de PocketBase y se cachea en IndexedDB para terreno. */
+  model?: {
+    kind: 'ifc' | 'gltf'
+    /** Nombre original del archivo, para mostrarlo. */
+    fileName: string
+    /** Nombre del archivo en PocketBase. Vacío hasta que se sincroniza. */
+    remoteName?: string
+    importedAt: string
+    elementCount: number
+  }
   /** Vulnerabilidad por configuración: irregularidad(id del catálogo) → clase
    *  0 ausente · 1 moderada · 2 severa/extrema. Ver src/data/vulnerability.ts. */
   vulnerability?: Record<string, number>
@@ -106,9 +134,14 @@ export interface Structure {
   inspectorIds?: string[]
 }
 
-/** ¿La estructura tiene modelo 3D (geometría) para el gemelo digital? */
+/** ¿La estructura tiene modelo 3D (geometría) para el gemelo digital?
+ *  Dos orígenes válidos: el pórtico paramétrico (`grid`) o un modelo importado
+ *  (`model`). En los dos casos lo que se dibuja son los `elements` con posición
+ *  y tamaño, así que la condición real es esa. */
 export function hasModel(s: Structure | null | undefined): boolean {
-  return !!s?.grid && s.elements.some((e) => e.position && e.size)
+  if (!s) return false
+  if (!s.grid && !s.model) return false
+  return s.elements.some((e) => e.position && e.size)
 }
 
 export interface Project {
@@ -162,6 +195,13 @@ export interface Finding {
   extension: number
   /** posición del pin sobre la superficie del elemento (coords mundo) — solo con 3D */
   pin?: Vec3
+  /** El hallazgo es sobre un elemento NO estructural (cielo, cristal, baranda,
+   *  revestimiento, instalación…). Se registra, se fotografía y sale en el
+   *  informe, pero NO entra en la condición estructural. Se guarda explícito y
+   *  no se deduce del nombre porque el nombre puede ser texto libre ("Otro").
+   *  Los hallazgos anteriores a este campo se resuelven por nombre —ver
+   *  `isNonStructural`—, así que `undefined` no significa "estructural". */
+  nonStructural?: boolean
   notes?: string
   photos: Photo[]
   createdAt: string
@@ -496,12 +536,21 @@ const PRIMARY_EDIF = new Set([
   'Pilote', 'Cabezal de pilotes', 'Sobrecimiento', 'Muro de subterráneo',
   'Anclaje', 'Conexión soldada', 'Conexión apernada', 'Empalme de armadura',
 ])
-const NONSTRUCT_EDIF = new Set(['Tabique', 'Antepecho / parapeto'])
+/** Nombres que se consideran no estructurales aunque el hallazgo no traiga la
+ *  bandera: los dos que reconocía la versión anterior más todo el catálogo no
+ *  estructural. Solo sirve de reserva para registros viejos. */
+const NONSTRUCT_BY_NAME = new Set<string>([
+  'Tabique',
+  'Antepecho / parapeto',
+  ...NONSTRUCTURAL_CATALOG.components.flatMap((c) => c.elements.map((e) => e.element)),
+])
 
-/** ¿El elemento es no estructural? Sus daños NO afectan la condición estructural
- *  (se registran/muestran aparte). */
-export function isNonStructural(element?: string): boolean {
-  return !!element && NONSTRUCT_EDIF.has(element)
+/** ¿El hallazgo es sobre un elemento no estructural? Sus daños NO afectan la
+ *  condición estructural: se registran, se informan y se muestran aparte.
+ *  Manda la bandera del hallazgo; si no la trae (registro anterior al campo),
+ *  se resuelve por el nombre del elemento. */
+export function isNonStructural(f: Pick<Finding, 'element' | 'nonStructural'>): boolean {
+  return f.nonStructural ?? NONSTRUCT_BY_NAME.has(f.element)
 }
 const PRIMARY_PUENTE = new Set([
   'Vigas', 'Longuerina', 'Voladizo', 'Aparato de apoyo', 'Columnas', 'Fundación',
@@ -510,15 +559,15 @@ const PRIMARY_PUENTE = new Set([
 ])
 
 /** Roll-up edificio (redundante): promedio ponderado por importancia + override
- *  por elemento primario dañado. Los elementos NO estructurales se excluyen (no
- *  afectan la condición estructural). Devuelve daño 0–1. */
+ *  por elemento primario dañado. Devuelve daño 0–1.
+ *  Lo no estructural ya viene descartado por `inspectionScore` — antes se
+ *  filtraba acá, y por eso la exclusión no aplicaba en puente. */
 function buildingDamage(elems: { name: string; dmg: number }[]): number {
-  const struct = elems.filter((e) => !NONSTRUCT_EDIF.has(e.name))
-  if (!struct.length) return 0
+  if (!elems.length) return 0
   let wsum = 0
   let wdmg = 0
   let primaryWorst = 0
-  for (const e of struct) {
+  for (const e of elems) {
     const w = weightOf(ELEMENT_WEIGHT, e.name)
     wsum += w
     wdmg += w * e.dmg
@@ -567,14 +616,19 @@ export function inspectionScore(
   structureType?: string,
   elements?: Element[],
 ): number {
-  if (!findings.length) return 100
+  // Los hallazgos NO estructurales quedan fuera de la calificación, cualquiera
+  // sea el tipo de estructura: un cielo desprendido o un cristal trizado no
+  // dicen nada de la capacidad resistente (ATC-20 / EMS-98 separan justamente
+  // eso). Se registran igual y se informan aparte — ver `nonStructuralCount`.
+  const structural = findings.filter((f) => !isNonStructural(f))
+  if (!structural.length) return 100
   if (structureType === 'puente') {
-    return Math.round(100 * (1 - bridgeDamage(elementDamages(findings))))
+    return Math.round(100 * (1 - bridgeDamage(elementDamages(structural))))
   }
   // edificio: si hay info de piso, agrega por piso; si no, todo en un grupo.
   const storyOf = new Map((elements ?? []).map((e) => [e.id, e.story ?? 0]))
   const byStory = new Map<number | string, Finding[]>()
-  for (const f of findings) {
+  for (const f of structural) {
     const st = f.elementId != null && storyOf.has(f.elementId) ? storyOf.get(f.elementId)! : '—'
     const arr = byStory.get(st)
     if (arr) arr.push(f)

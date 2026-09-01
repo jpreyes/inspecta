@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useInspectionStore } from '../../stores/inspection'
 
-import { Box, ChartColumn, Compass, List, Menu } from 'lucide-vue-next'
+import { Box, ChartColumn, Compass, FlaskConical, List, Menu } from 'lucide-vue-next'
 import SyncControl from '../sync/SyncControl.vue'
 import TeamPanel from '../team/TeamPanel.vue'
 import { CONDITION, conditionFromScore } from '../../types/inspection'
@@ -57,6 +57,14 @@ const conditionColor = computed(() => CONDITION[conditionFromScore(structureCond
         @click="store.setView('twin')"
       >
         <Box :size="14" /> <span class="hidden sm:inline">Gemelo 3D</span>
+      </button>
+      <button
+        data-tour="tests-view"
+        class="flex items-center gap-1.5 rounded-md px-3 py-1 font-medium transition-colors"
+        :class="activeView === 'tests' ? 'bg-ink-800 text-ink-100' : 'text-ink-400 hover:text-ink-200'"
+        @click="store.setView('tests')"
+      >
+        <FlaskConical :size="14" /> <span class="hidden sm:inline">Ensayos</span>
       </button>
       <button
         class="flex items-center gap-1.5 rounded-md px-3 py-1 font-medium transition-colors"

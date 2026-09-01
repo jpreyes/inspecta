@@ -9,6 +9,7 @@ import TwinCanvas from './components/twin/TwinCanvas.vue'
 import InspectionSelector from './components/inspection/InspectionSelector.vue'
 import InspectionPanel from './components/inspection/InspectionPanel.vue'
 import ResultsView from './components/results/ResultsView.vue'
+import TestsView from './components/tests/TestsView.vue'
 import DamageListView from './components/list/DamageListView.vue'
 import DamageForm from './components/inspection/DamageForm.vue'
 import TourOverlay from './components/tour/TourOverlay.vue'
@@ -76,6 +77,9 @@ onMounted(() => store.init())
         </main>
         <InspectionPanel class="hidden w-96 shrink-0 border-l border-ink-800 bg-ink-900 lg:block" />
       </template>
+
+      <!-- Vista ENSAYOS -->
+      <TestsView v-else-if="activeView === 'tests'" class="min-w-0 flex-1 overflow-y-auto bg-ink-950" />
 
       <!-- Vista RESULTADOS -->
       <ResultsView v-else class="min-w-0 flex-1 overflow-y-auto bg-ink-950" />

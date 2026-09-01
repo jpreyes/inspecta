@@ -156,6 +156,29 @@ export const backend = {
     return pb.collection(col).getFullList(opts)
   },
 
+  /**
+   * Escucha en vivo los cambios de una colección (SSE contra /api/realtime).
+   * El servidor entrega solo lo que la regla de lectura permite ver, así que
+   * un inspector recibe el trabajo de su equipo y nada más.
+   *
+   * Es lo que hace que el trabajo ajeno aparezca sin apretar "Sincronizar":
+   * antes solo se traía al abrir la app, así que dos personas en terreno no se
+   * veían hasta que una cerraba y volvía a entrar.
+   *
+   * Devuelve la función para cortar la suscripción.
+   */
+  async subscribe(
+    col: RemoteCollection,
+    cb: (action: string, record: Record<string, unknown> & { id: string }) => void,
+    expand?: string,
+  ): Promise<() => void> {
+    return pb.collection(col).subscribe(
+      '*',
+      (e) => cb(e.action, e.record as unknown as Record<string, unknown> & { id: string }),
+      expand ? { expand } : undefined,
+    )
+  },
+
   /** Upsert por id (los ids son UUID generados en el cliente → estables). */
   async push(col: RemoteCollection, record: Record<string, unknown>): Promise<unknown> {
     try {
@@ -167,6 +190,28 @@ export const backend = {
 
   async remove(col: RemoteCollection, id: string): Promise<void> {
     await pb.collection(col).delete(id)
+  },
+
+  /** Sube el archivo del gemelo 3D a la estructura y devuelve el nombre con que
+   *  quedó guardado. Reemplaza el anterior: `model` es un campo de un archivo. */
+  async uploadModel(structureId: string, file: File): Promise<string> {
+    const fd = new FormData()
+    fd.append('model', file)
+    const rec = (await pb.collection('structures').update(structureId, fd)) as unknown as {
+      model?: string | string[]
+    }
+    const name = Array.isArray(rec.model) ? rec.model[0] : rec.model
+    if (!name) throw new Error('El servidor no devolvió el archivo del modelo.')
+    return name
+  },
+
+  /** Baja el archivo del gemelo 3D. Se hace una vez por dispositivo: después
+   *  vive en IndexedDB y el gemelo funciona sin señal. */
+  async downloadModel(structureId: string, fileName: string): Promise<Blob> {
+    const url = pb.files.getURL({ id: structureId, collectionId: 'structures' }, fileName)
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`No se pudo bajar el modelo (${res.status}).`)
+    return res.blob()
   },
 
   /** Sube una foto real (archivo) al hallazgo — PocketBase genera el thumbnail. */

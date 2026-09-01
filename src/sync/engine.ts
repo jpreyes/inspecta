@@ -1,8 +1,9 @@
 import { db } from '../db'
 import { backend, dataUrlToFile, type RemoteCollection } from './backend'
 import * as M from './mappers'
+import { upsertFinding, upsertStructure } from './apply'
 import { isDemoRecord } from '../data/seed'
-import type { Finding, Inspection, Structure } from '../types/inspection'
+import type { Inspection, Structure } from '../types/inspection'
 import { can as roleCan, roleInTeam, type Role, type Team } from '../types/team'
 
 // IDs compatibles con PocketBase (15 chars [a-z0-9]). Registros con ids viejos
@@ -12,6 +13,8 @@ const PB_ID = /^[a-z0-9]{15}$/
 export interface SyncResult {
   pushed: number
   photos: number
+  /** Archivos de gemelo 3D subidos en esta corrida. */
+  models: number
   pulled: number
   /** Registros que no se enviaron: ajenos al rol, demo, o rechazados. */
   skipped: number
@@ -34,6 +37,7 @@ export async function syncNow(): Promise<SyncResult> {
   const me = backend.user!.id
   let pushed = 0
   let photos = 0
+  let models = 0
   let pulled = 0
   let skipped = 0
 
@@ -122,12 +126,31 @@ export async function syncNow(): Promise<SyncResult> {
       M.projectToRemote(p, me),
     ),
   )
-  await pushAll(
-    'structures',
-    sendable(localStructures, (s) => owned(mayManage(s.teamId))).map((s) =>
-      M.structureToRemote(s, me),
-    ),
-  )
+  const pushableStructures = sendable(localStructures, (s) => owned(mayManage(s.teamId)))
+  await pushAll('structures', pushableStructures.map((s) => M.structureToRemote(s, me)))
+
+  // ── GEMELOS 3D: subir el archivo del modelo importado ──
+  // Va después de la estructura (el registro tiene que existir) y solo una vez:
+  // en cuanto PocketBase devuelve el nombre del archivo, queda anotado en
+  // `model.remoteName` y no se vuelve a subir. La BAJADA no se hace acá a
+  // propósito — un IFC son megabytes y en terreno se pagan con datos móviles,
+  // así que se descarga cuando alguien abre el gemelo (`ensureModelFile`).
+  for (const st of pushableStructures) {
+    if (!st.model || st.model.remoteName || !PB_ID.test(st.id)) continue
+    const stored = await db.models.get(st.id)
+    if (!stored) continue
+    try {
+      const file = new File([stored.blob], stored.fileName, {
+        type: 'application/octet-stream',
+      })
+      const remoteName = await backend.uploadModel(st.id, file)
+      st.model.remoteName = remoteName
+      await db.structures.put(st)
+      models++
+    } catch {
+      skipped++
+    }
+  }
   await pushAll(
     'inspections',
     sendable(localInspections, (i) =>
@@ -180,16 +203,25 @@ export async function syncNow(): Promise<SyncResult> {
   }
   // `author` se expande para poder mostrar quién registró cada cosa sin conexión.
   await pullInto(db.projects, (await backend.pull('projects')).map(M.projectFromRemote))
-  await pullInto(db.structures, (await backend.pull('structures')).map(M.structureFromRemote))
+  // Igual que los hallazgos: no es un `put` a secas. Una estructura cuyo gemelo
+  // se acaba de importar y todavía no sube no puede perder su modelo por el
+  // hecho de que el servidor aún no lo tenga (ver sync/apply.ts).
+  for (const st of (await backend.pull('structures')).map(M.structureFromRemote)) {
+    await upsertStructure(st)
+    pulled++
+  }
   await pullInto(
     db.inspections,
     (await backend.pull('inspections', undefined, 'author')).map(M.inspectionFromRemote),
   )
-  await pullInto<Finding>(
-    db.findings,
-    (await backend.pull('findings', undefined, 'author')).map(M.findingFromRemote),
-  )
+  // Los hallazgos no se guardan con un `put` a secas: hay que conservar las
+  // fotos tomadas sin señal que todavía no se han subido, o el propio pull las
+  // borra antes de que lleguen al servidor (ver sync/apply.ts).
+  for (const f of (await backend.pull('findings', undefined, 'author')).map(M.findingFromRemote)) {
+    await upsertFinding(f)
+    pulled++
+  }
   await pullInto(db.tests, (await backend.pull('tests', undefined, 'author')).map(M.testFromRemote))
 
-  return { pushed, photos, pulled, skipped }
+  return { pushed, photos, models, pulled, skipped }
 }

@@ -1,6 +1,7 @@
+import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -9,6 +10,30 @@ import { VitePWA } from 'vite-plugin-pwa'
 // sincronizar → "EBUSY: rename" al reoptimizar deps → página en blanco.
 // Movemos la caché de Vite fuera de Dropbox (temp del sistema).
 const cacheDir = path.join(os.tmpdir(), 'vite-inspecta')
+
+/**
+ * Sirve `web-ifc.wasm` con NOMBRE FIJO en la raíz.
+ *
+ * web-ifc lo busca por ruta (`SetWasmPath('/')` → pide `/web-ifc.wasm`), así que
+ * no sirve dejar que Vite lo trate como un asset con hash: hay que emitirlo tal
+ * cual. Y no se commitea en `public/` porque son 1,3 MB de binario que ya vienen
+ * en node_modules y quedarían desincronizados con la versión del paquete.
+ */
+function webIfcWasm(): Plugin {
+  const source = path.join(process.cwd(), 'node_modules/web-ifc/web-ifc.wasm')
+  return {
+    name: 'inspecta:web-ifc-wasm',
+    configureServer(server) {
+      server.middlewares.use('/web-ifc.wasm', (_req, res) => {
+        res.setHeader('Content-Type', 'application/wasm')
+        fs.createReadStream(source).pipe(res)
+      })
+    },
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'web-ifc.wasm', source: fs.readFileSync(source) })
+    },
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -39,6 +64,7 @@ export default defineConfig(({ mode }) => {
       },
     }),
     tailwindcss(),
+    webIfcWasm(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
@@ -66,7 +92,17 @@ export default defineConfig(({ mode }) => {
         ],
       },
       workbox: {
+        // web-ifc queda FUERA del precache, tanto su JS (3,5 MB) como su WASM
+        // (1,3 MB). Precachearlos costaría casi 5 MB de datos móviles a CADA
+        // inspector en terreno por una función que se usa una vez, sentado en
+        // el escritorio, al dar de alta la estructura. Y precachear solo el
+        // .wasm no serviría de nada: sin su JS no se puede usar.
+        //
+        // Consecuencia asumida: importar un IFC necesita conexión la primera
+        // vez. El gemelo ya importado sí funciona sin señal — el archivo del
+        // modelo se cachea aparte, en IndexedDB (ver db/index.ts).
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        globIgnores: ['**/web-ifc*'],
       },
     }),
   ],

@@ -1,4 +1,5 @@
 import type { Finding, Inspection, Project, Structure, Test, Vec3 } from '../types/inspection'
+import { isNonStructural } from '../types/inspection'
 import { generateFrame } from '../data/generate'
 import { backend } from './backend'
 
@@ -36,6 +37,9 @@ export function structureToRemote(s: Structure, owner: string): Remote {
     elements: s.elements, // persistimos la lista (necesario para estructuras sin modelo 3D)
     vulnerability: s.vulnerability ?? {},
     site: s.site ?? {},
+    // Metadato del gemelo importado. El ARCHIVO no va acá: se sube aparte con
+    // `uploadModel`, igual que las fotos de los hallazgos.
+    model_meta: s.model ? { ...s.model, remoteName: undefined } : null,
     team: rel(s.teamId),
     inspectors: s.inspectorIds ?? [],
     owner,
@@ -72,6 +76,7 @@ export function findingToRemote(f: Finding, owner: string): Remote {
     severity: f.severity,
     extension: f.extension,
     pin: f.pin ?? null,
+    non_structural: isNonStructural(f),
     notes: f.notes ?? '',
     team: rel(f.teamId),
     author: rel(f.authorId),
@@ -118,6 +123,21 @@ export function projectFromRemote(r: any): Project {
   }
 }
 
+/** Metadato del gemelo importado + el nombre del archivo tal como quedó en
+ *  PocketBase. Sin archivo no hay modelo, aunque el metadato haya sobrevivido. */
+function modelFromRemote(r: any): Structure['model'] {
+  const meta = r.model_meta
+  const file = Array.isArray(r.model) ? r.model[0] : r.model
+  if (!file || !meta || typeof meta !== 'object') return undefined
+  return {
+    kind: meta.kind === 'ifc' ? 'ifc' : 'gltf',
+    fileName: String(meta.fileName ?? file),
+    remoteName: String(file),
+    importedAt: String(meta.importedAt ?? r.updated ?? ''),
+    elementCount: Number(meta.elementCount) || 0,
+  }
+}
+
 export function structureFromRemote(r: any): Structure {
   const grid = (r.grid || undefined) as Structure['grid']
   const stored = Array.isArray(r.elements) ? (r.elements as Structure['elements']) : []
@@ -131,6 +151,9 @@ export function structureFromRemote(r: any): Structure {
     grid,
     // usa la lista guardada; si no hay y sí hay grilla, la regenera
     elements: stored.length ? stored : grid ? generateFrame(grid) : [],
+    // El metadato del modelo se combina con el nombre real del archivo en
+    // PocketBase (`r.model`), que es lo que permite bajarlo después.
+    model: modelFromRemote(r),
     vulnerability: vuln,
     site,
     teamId: r.team || undefined,
@@ -173,6 +196,7 @@ export function findingFromRemote(r: any): Finding {
     severity: r.severity,
     extension: r.extension,
     pin: (r.pin as Vec3) || undefined,
+    nonStructural: r.non_structural ? true : undefined,
     notes: r.notes || undefined,
     photos: filenames.map((fn) => ({
       id: fn,

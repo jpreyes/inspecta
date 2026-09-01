@@ -15,10 +15,12 @@ import { generateFrame } from '../data/generate'
 import { registeredIrregularities, riskLevel } from '../data/vulnerability'
 import { hazardIndex, type SiteConfig } from '../data/hazard'
 import { db, seedIfEmpty } from '../db'
+import { parseModel, summarize, kindOf } from '../model'
 import { isDemoRecord } from '../data/seed'
 import { TOUR_STEPS } from '../data/tour'
 import { backend, type RemoteUser } from '../sync/backend'
 import { syncNow as runSync } from '../sync/engine'
+import { watchRemote } from '../sync/realtime'
 import {
   can as roleCan,
   membersOf,
@@ -35,6 +37,11 @@ import {
 function plain<T>(o: T): T {
   return JSON.parse(JSON.stringify(o))
 }
+
+/** Vistas centrales de la app. Vive acá arriba —y no dentro del store— para que
+ *  la guía guiada (src/data/tour.ts) declare su `view` con el mismo tipo y no se
+ *  puedan desincronizar. */
+export type AppView = 'list' | 'twin' | 'tests' | 'results'
 
 /** ID de 15 caracteres [a-z0-9] — compatible con los record ids de PocketBase,
  *  para que el mismo id sirva local y remoto. */
@@ -58,8 +65,8 @@ export const useInspectionStore = defineStore('inspection', () => {
   const tests = ref<Test[]>([])
   const ready = ref(false)
 
-  /** Vista central: lista de daños (por defecto), gemelo 3D o resultados. */
-  const activeView = ref<'list' | 'twin' | 'results'>('list')
+  /** Vista central: lista de daños (por defecto), gemelo 3D, ensayos o resultados. */
+  const activeView = ref<AppView>('list')
 
   /** Sidebar como drawer en pantallas chicas (móvil/tablet). */
   const sidebarOpen = ref(false)
@@ -85,6 +92,29 @@ export const useInspectionStore = defineStore('inspection', () => {
   const lastSyncAt = ref<string | null>(null)
   const syncMessage = ref('')
 
+  // ── Tiempo real ────────────────────────────────────────
+  // El sync es una corrida puntual; entre corrida y corrida, el trabajo que
+  // sube otra persona no aparecía. `live` es la suscripción SSE que lo trae
+  // solo, y `liveOn` lo que muestra la interfaz ("en vivo" vs "sin conexión").
+  let stopLive: (() => void) | null = null
+  const liveOn = ref(false)
+  /** Marca de que llegó trabajo ajeno desde la última vez que se miró. */
+  const remoteChanges = ref(0)
+
+  async function startLive() {
+    if (stopLive || !authUser.value) return
+    stopLive = await watchRemote(() => {
+      remoteChanges.value++
+      void reload()
+    })
+    liveOn.value = true
+  }
+  function stopLiveUpdates() {
+    stopLive?.()
+    stopLive = null
+    liveOn.value = false
+  }
+
   // ── Sesión obligatoria ─────────────────────────────────
   // Los proyectos son del servidor, no del dispositivo: sin sesión no se
   // muestra ningún dato. La primera entrada necesita internet; después la
@@ -108,6 +138,7 @@ export const useInspectionStore = defineStore('inspection', () => {
     return Number.isFinite(ms) ? ms / 86_400_000 : null
   }
   function dropSession(reason: string) {
+    stopLiveUpdates()
     backend.logout()
     authUser.value = null
     teams.value = []
@@ -289,7 +320,42 @@ export const useInspectionStore = defineStore('inspection', () => {
     if (await backend.isReachable()) {
       await syncNow().catch(() => {})
       focusInitialStructure()
+      // Desde acá el trabajo del equipo llega solo, sin apretar nada.
+      await startLive().catch(() => {})
     }
+    watchForeground()
+  }
+
+  // ── Volver a la app = ponerse al día ───────────────────
+  // En terreno el teléfono se bloquea, la pestaña queda de fondo y la conexión
+  // se cae y vuelve. En todos esos casos el SSE puede haberse perdido eventos,
+  // así que al volver al frente se hace una corrida de sync y se reabre la
+  // escucha. Con estrangulamiento: volver a la app tres veces seguidas no
+  // dispara tres sincronizaciones.
+  const FOREGROUND_THROTTLE_MS = 60_000
+  let lastForegroundSync = 0
+  let foregroundHooked = false
+
+  async function catchUp() {
+    if (!authUser.value || syncing.value) return
+    if (Date.now() - lastForegroundSync < FOREGROUND_THROTTLE_MS) return
+    if (!(await backend.isReachable())) {
+      stopLiveUpdates()
+      return
+    }
+    lastForegroundSync = Date.now()
+    await syncNow().catch(() => {})
+    await startLive().catch(() => {})
+  }
+
+  function watchForeground() {
+    if (foregroundHooked || typeof document === 'undefined') return
+    foregroundHooked = true
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') void catchUp()
+    })
+    window.addEventListener('online', () => void catchUp())
+    window.addEventListener('offline', () => stopLiveUpdates())
   }
 
   /**
@@ -423,19 +489,45 @@ export const useInspectionStore = defineStore('inspection', () => {
    *  se registra aparte (no entra al número). */
   const structureRisk = computed(() => riskLevel(structureCondition.value, structureHazard.value))
 
-  /** Hallazgos no estructurales de la campaña (no afectan la condición estructural). */
-  const nonStructuralCount = computed(
-    () => currentFindings.value.filter((f) => isNonStructural(f.element)).length,
+  /** Hallazgos de la campaña separados por ámbito. La condición estructural la
+   *  calculan solo los primeros; los segundos se registran, se informan y se
+   *  muestran aparte (ver `isNonStructural`). */
+  const structuralFindings = computed<Finding[]>(() =>
+    currentFindings.value.filter((f) => !isNonStructural(f)),
   )
+  const nonStructuralFindings = computed<Finding[]>(() =>
+    currentFindings.value.filter((f) => isNonStructural(f)),
+  )
+  const nonStructuralCount = computed(() => nonStructuralFindings.value.length)
 
-  /** Condición por campaña de inspección — comparación entre visitas periódicas. */
+  /** Condición por campaña de inspección — comparación entre visitas periódicas.
+   *  Lleva también cuántos hallazgos y ensayos tiene cada una: la app muestra
+   *  UNA campaña a la vez, así que sin este conteo el trabajo registrado en otra
+   *  campaña es indistinguible de que no exista. */
   const conditionByCampaign = computed(() =>
     structureInspections.value.map((insp) => {
       const fs = findings.value.filter((f) => f.inspectionId === insp.id)
       const score = inspectionScore(fs, activeStructure.value?.type, activeStructure.value?.elements)
-      return { id: insp.id, date: insp.date, score, key: conditionFromScore(score) }
+      return {
+        id: insp.id,
+        date: insp.date,
+        score,
+        key: conditionFromScore(score),
+        findings: fs.length,
+        tests: tests.value.filter((t) => t.inspectionId === insp.id).length,
+      }
     }),
   )
+
+  /** Hallazgos de la estructura activa que están en OTRA campaña que la abierta.
+   *  Sirve para avisar "el trabajo está, pero no en la campaña que estás
+   *  mirando" — que es como se ve, desde la interfaz, no ver lo de otra persona. */
+  const findingsInOtherCampaigns = computed(() => {
+    const ids = new Set(structureInspections.value.map((i) => i.id))
+    return findings.value.filter(
+      (f) => ids.has(f.inspectionId) && f.inspectionId !== activeInspection.value?.id,
+    ).length
+  })
 
   /** Conteo de hallazgos por severidad en la campaña activa. */
   const severityCounts = computed<Record<Severity, number>>(() => {
@@ -462,7 +554,7 @@ export const useInspectionStore = defineStore('inspection', () => {
     selectedElementId.value = id
   }
 
-  function setView(v: 'list' | 'twin' | 'results') {
+  function setView(v: AppView) {
     activeView.value = v
     sidebarOpen.value = false
   }
@@ -654,6 +746,7 @@ export const useInspectionStore = defineStore('inspection', () => {
     severity: Severity
     extension: number
     pin?: Vec3
+    nonStructural?: boolean
     notes?: string
   }) {
     if (!activeInspection.value) return
@@ -815,6 +908,133 @@ export const useInspectionStore = defineStore('inspection', () => {
     await db.structures.put(plain(s))
   }
 
+  // ── Gemelo 3D: pórtico paramétrico o modelo importado ──
+  // Las dos cosas producen lo mismo (`elements` con posición y tamaño); cambia
+  // de dónde salen. Y las dos se pueden hacer DESPUÉS de crear la estructura,
+  // que era justamente lo que faltaba: una estructura dada de alta sin marcar
+  // la casilla se quedaba sin gemelo para siempre.
+
+  /** Estado del importador, para que la interfaz muestre en qué va. */
+  const modelBusy = ref(false)
+  const modelMessage = ref('')
+
+  /** Genera (o regenera) el pórtico paramétrico de una estructura. */
+  async function setStructureGrid(structureId: string, grid: Structure['grid']) {
+    if (!can('manage_projects')) throw new Error('Tu rol no permite editar estructuras.')
+    const st = structures.value.find((x) => x.id === structureId)
+    if (!st) return
+    st.grid = grid
+    st.elements = grid ? generateFrame(grid) : []
+    st.model = undefined
+    await db.structures.put(plain(st))
+    await db.models.delete(structureId)
+  }
+
+  /**
+   * Importa un modelo IFC o glTF/GLB como gemelo de la estructura.
+   *
+   * El archivo se guarda en IndexedDB (para trabajar sin señal) y sube a
+   * PocketBase en la siguiente sincronización. De él se extrae además la capa
+   * semántica —`elements` con su tag, tipo, piso y caja envolvente—, que es
+   * contra la que se cuelgan los hallazgos.
+   */
+  async function importStructureModel(structureId: string, file: File) {
+    if (!can('manage_projects')) throw new Error('Tu rol no permite editar estructuras.')
+    const st = structures.value.find((x) => x.id === structureId)
+    if (!st) return
+    const kind = kindOf(file.name)
+    if (!kind) throw new Error('Formato no reconocido. Usa un archivo .ifc, .glb o .gltf.')
+
+    modelBusy.value = true
+    modelMessage.value = 'Leyendo el modelo…'
+    try {
+      const parsed = await parseModel(file, file.name)
+
+      st.model = {
+        kind: parsed.kind,
+        fileName: file.name,
+        importedAt: new Date().toISOString(),
+        elementCount: parsed.elements.length,
+      }
+      // El modelo importado manda: reemplaza al pórtico paramétrico, no convive
+      // con él (dos geometrías para la misma estructura no significan nada).
+      st.grid = undefined
+      st.elements = plain(parsed.elements)
+      await db.structures.put(plain(st))
+      await db.models.put({
+        structureId,
+        blob: file,
+        fileName: file.name,
+        kind: parsed.kind,
+        updatedAt: new Date().toISOString(),
+      })
+
+      // Llevar al gemelo solo si es la estructura que se está mirando: se puede
+      // editar una estructura del árbol sin ser la activa.
+      if (selectedStructureId.value === structureId) {
+        selectedElementId.value = null
+        activeView.value = 'twin'
+      }
+      modelMessage.value = [summarize(parsed), ...parsed.notes].join(' · ')
+      return parsed
+    } finally {
+      modelBusy.value = false
+    }
+  }
+
+  /**
+   * Asegura que el archivo del gemelo esté en este dispositivo, bajándolo del
+   * servidor si hace falta.
+   *
+   * La descarga es BAJO DEMANDA y no parte del sync: un IFC son megabytes y en
+   * terreno se pagan con datos móviles, así que solo se baja cuando alguien
+   * abre de verdad la vista 3D. Después queda en IndexedDB y funciona sin señal.
+   */
+  async function ensureModelFile(structureId: string): Promise<Blob | null> {
+    const st = structures.value.find((x) => x.id === structureId)
+    if (!st?.model) return null
+    const cached = await db.models.get(structureId)
+    if (cached) return cached.blob
+    if (!st.model.remoteName) return null // aún no ha subido: no hay de dónde
+
+    modelBusy.value = true
+    modelMessage.value = 'Bajando el modelo 3D…'
+    try {
+      const blob = await backend.downloadModel(structureId, st.model.remoteName)
+      await db.models.put({
+        structureId,
+        blob,
+        fileName: st.model.fileName,
+        kind: st.model.kind,
+        updatedAt: new Date().toISOString(),
+      })
+      modelMessage.value = ''
+      return blob
+    } catch (e) {
+      modelMessage.value =
+        'No se pudo bajar el modelo 3D: ' + ((e as Error)?.message ?? String(e))
+      return null
+    } finally {
+      modelBusy.value = false
+    }
+  }
+
+  /** Quita el gemelo (el archivo y la geometría). Los hallazgos NO se borran:
+   *  quedan sin elemento 3D asociado, que es como viven en una estructura que
+   *  nunca tuvo modelo. */
+  async function removeStructureModel(structureId: string) {
+    if (!can('manage_projects')) throw new Error('Tu rol no permite editar estructuras.')
+    const st = structures.value.find((x) => x.id === structureId)
+    if (!st) return
+    st.model = undefined
+    st.grid = undefined
+    st.elements = []
+    await db.structures.put(plain(st))
+    await db.models.delete(structureId)
+    if (activeView.value === 'twin') activeView.value = 'list'
+    modelMessage.value = ''
+  }
+
   async function removeStructure(id: string) {
     if (!can('manage_projects')) throw new Error('Tu rol no permite eliminar estructuras.')
     const inspIds = inspections.value.filter((i) => i.structureId === id).map((i) => i.id)
@@ -828,6 +1048,7 @@ export const useInspectionStore = defineStore('inspection', () => {
     }
     await db.inspections.where('structureId').equals(id).delete()
     await db.structures.delete(id)
+    await db.models.delete(id)
     if (selectedStructureId.value === id) {
       selectedStructureId.value = structures.value[0]?.id ?? null
       selectedElementId.value = null
@@ -937,6 +1158,17 @@ export const useInspectionStore = defineStore('inspection', () => {
     structureHazard,
     structureRisk,
     nonStructuralCount,
+    structuralFindings,
+    nonStructuralFindings,
+    liveOn,
+    remoteChanges,
+    findingsInOtherCampaigns,
+    modelBusy,
+    modelMessage,
+    setStructureGrid,
+    importStructureModel,
+    removeStructureModel,
+    ensureModelFile,
     conditionByCampaign,
     severityCounts,
     currentTests,
