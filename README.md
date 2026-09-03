@@ -210,8 +210,8 @@ miembros con un rol cada uno:
 |---|---|---|---|---|
 | Administrador | ✅ | ✅ | ✅ (todas) | ✅ |
 | Inspector | — | — | ✅ (solo asignadas) | ✅ |
-| Revisor | — | — | — | ✅ |
-| Cliente | — | — | — | ✅ |
+| Revisor | — | — | — | ✅ (todo el equipo) |
+| Cliente | — | — | — | ✅ (solo sus proyectos) |
 
 Los roles se guardan como **cuatro listas de usuarios en el propio equipo**
 (`admins`/`inspectors`/`reviewers`/`clients`), no en una colección `memberships`:
@@ -240,8 +240,40 @@ tiene asignadas.
 
 Una estructura **sin asignados queda abierta** a todos los inspectores del equipo —
 así el modelo es retrocompatible y no hay que asignar nada para empezar a trabajar.
-Asignar es competencia del administrador (`structures` solo lo actualiza él). Los
-revisores y clientes no se asignan: su acceso es de lectura sobre todo el equipo.
+Asignar es competencia del administrador (`structures` solo lo actualiza él).
+
+**Asignación por proyecto, para los clientes** (`projects.clients`,
+`pb_migrations/1788400100`). El cliente es de solo lectura, pero eso no dice *cuánto*
+lee: un equipo que atiende a varios mandantes no puede mostrarle a cada uno el trabajo
+de los demás. Un cliente ve únicamente los proyectos donde está asignado, y con ellos
+sus estructuras, campañas, hallazgos y ensayos; el resto del equipo sigue viendo todo.
+
+Acá la convención es **la contraria** a la de los inspectores: una lista de clientes
+vacía no abre el proyecto, lo cierra. Heredar el acceso del equipo es justamente lo que
+se está corrigiendo, así que falla cerrado — sin asignación explícita, ningún cliente
+ve el proyecto. Se marca en el editor de proyectos del árbol lateral, y no hay que
+confundirlo con el campo «Cliente» de al lado, que es el *nombre* del mandante para el
+informe. Los revisores no se asignan: leen todo el equipo.
+
+**El `owner` ya no abre puertas en un registro de equipo.** Las reglas traían de arrastre
+`owner = @request.auth.id` para que los registros personales anteriores a los equipos
+siguieran siendo accesibles; esos tienen `team = ''`, así que la salida quedó acotada a
+ellos. Sobre un registro de equipo era un agujero: quien creó algo y después bajó a
+cliente lo seguía editando y borrando.
+
+**Y una grieta en la creación, que el hook cierra** (`pb_hooks/keep_team.pb.js`). La regla
+de creación tiene una rama para el registro personal (`@request.body.team = ""`), así que
+cualquier cuenta autenticada podía crear un hallazgo con `team: ''` colgado de la campaña
+de un equipo ajeno: no lo veía nadie más, pero en la app de quien lo creó aparecía dentro
+de esa campaña, como un daño más del informe. Ojo con el orden si se toca esto: la regla
+se evalúa contra **`@request.body`**, o sea contra lo que mandó el cliente, así que un
+hook que le ponga el equipo al registro no lo somete a ninguna regla — heredarlo, que era
+lo natural, hacía que el hallazgo del cliente se guardara con el equipo puesto y pasara a
+verlo el equipo entero. Por eso el hook **rechaza** en vez de heredar cuando el autor no
+puede escribir en el equipo del padre.
+
+Todo esto está cubierto por `scripts/check-client-scope.mjs`, que corre contra un
+PocketBase de verdad (ver la cabecera del archivo).
 
 **Sin equipo la app está en modo local**: sin sesión los datos son de ese dispositivo,
 no hay a quién restringir y el acceso es completo — es lo que mantiene intacto el

@@ -99,6 +99,9 @@ const ed = reactive({
   fileError: '',
   /** Inspectores asignados a la estructura. Vacío = abierta a todo el equipo. */
   inspectorIds: [] as string[],
+  /** Clientes con acceso al proyecto. Al revés que los inspectores, vacío NO
+   *  es "abierto a todos": el proyecto queda cerrado para todos los clientes. */
+  clientIds: [] as string[],
 })
 
 /** ¿La estructura que se está editando ya tiene gemelo? */
@@ -149,6 +152,15 @@ function toggleInspector(userId: string) {
   if (i >= 0) ed.inspectorIds.splice(i, 1)
   else ed.inspectorIds.push(userId)
 }
+
+/** Clientes del equipo: los que pueden recibir acceso a un proyecto. */
+const clientMembers = computed(() => teamMembers.value.filter((m) => m.role === 'cliente'))
+
+function toggleClient(userId: string) {
+  const i = ed.clientIds.indexOf(userId)
+  if (i >= 0) ed.clientIds.splice(i, 1)
+  else ed.clientIds.push(userId)
+}
 const editorTitle = computed(
   () =>
     ({
@@ -160,10 +172,17 @@ const editorTitle = computed(
 )
 
 function openNewProject() {
-  Object.assign(ed, { mode: 'new-project', name: '', client: '' })
+  Object.assign(ed, { mode: 'new-project', name: '', client: '', clientIds: [] })
 }
 function openEditProject(id: string, name: string, client?: string) {
-  Object.assign(ed, { mode: 'edit-project', projectId: id, name, client: client ?? '' })
+  const p = projects.value.find((x) => x.id === id)
+  Object.assign(ed, {
+    mode: 'edit-project',
+    projectId: id,
+    name,
+    client: client ?? '',
+    clientIds: [...(p?.clientIds ?? [])],
+  })
 }
 function openNewStructure(projectId: string) {
   Object.assign(ed, {
@@ -219,9 +238,13 @@ async function submitEditor() {
   if (!name) return
   submitError.value = ''
   try {
-    if (ed.mode === 'new-project') await store.addProject({ name, client: ed.client })
-    else if (ed.mode === 'edit-project')
+    if (ed.mode === 'new-project') {
+      const p = await store.addProject({ name, client: ed.client })
+      if (p && ed.clientIds.length) await store.assignClients(p.id, ed.clientIds)
+    } else if (ed.mode === 'edit-project') {
       await store.updateProject(ed.projectId, { name, client: ed.client.trim() || undefined })
+      await store.assignClients(ed.projectId, ed.clientIds)
+    }
     else if (ed.mode === 'new-structure') {
       const s = await store.addStructure({
         projectId: ed.projectId,
@@ -348,6 +371,38 @@ const structureDamaged = computed(() => Object.keys(severityByElement.value).len
         placeholder="Cliente (opcional)"
         class="block w-full rounded-md border border-ink-700 bg-ink-800 px-2 py-1 text-xs text-ink-200"
       />
+      <!-- Acceso del cliente al proyecto.
+           `ed.client` (arriba) es el NOMBRE del mandante, texto suelto para el
+           informe. Esto es otra cosa: las cuentas de rol cliente que podrán
+           abrir este proyecto. Sin marcar ninguna, ningún cliente lo ve. -->
+      <div
+        v-if="(ed.mode === 'new-project' || ed.mode === 'edit-project') && clientMembers.length"
+        class="rounded-md border border-ink-800 bg-ink-900/60 p-2"
+      >
+        <div class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+          Clientes con acceso
+        </div>
+        <label
+          v-for="m in clientMembers"
+          :key="m.userId"
+          class="flex items-center gap-1.5 py-0.5 text-[11px] text-ink-300"
+        >
+          <input
+            type="checkbox"
+            class="accent-brand-600"
+            :checked="ed.clientIds.includes(m.userId)"
+            @change="toggleClient(m.userId)"
+          />
+          <span class="truncate">{{ m.email || m.name || m.userId }}</span>
+        </label>
+        <p class="mt-1 text-[10px] leading-snug text-ink-600">
+          {{
+            ed.clientIds.length
+              ? 'Solo estos clientes verán este proyecto, y solo para leer.'
+              : 'Sin marcar: ningún cliente ve este proyecto. El resto del equipo sí.'
+          }}
+        </p>
+      </div>
       <template v-if="ed.mode === 'new-structure' || ed.mode === 'edit-structure'">
         <select
           v-model="ed.type"

@@ -65,6 +65,15 @@ export async function syncNow(): Promise<SyncResult> {
     return p === 'local' || (p !== 'none' && roleCan(p, 'manage_projects'))
   }
 
+  /** ¿El rol en ese equipo es de solo lectura (revisor, cliente)? Entonces no
+   *  hay nada que enviar y tampoco nada que reportar: no se cuenta como
+   *  omitido. Contarlo dejaba a un cliente con un "Omitidos 12" en cada
+   *  sincronización, que se lee como un fallo y no lo es — su rol es leer. */
+  function readOnly(teamId?: string): boolean {
+    const p = permission(teamId)
+    return p !== 'local' && p !== 'none' && !roleCan(p, 'edit_data') && !roleCan(p, 'manage_projects')
+  }
+
   /** Trabajo de terreno: admin siempre; inspector solo donde está asignado
    *  (o si la estructura no tiene asignados). Es la misma regla del servidor. */
   function mayWork(teamId: string | undefined, structure?: Structure): boolean {
@@ -87,9 +96,10 @@ export async function syncNow(): Promise<SyncResult> {
     insp ? structureById.get(insp.structureId) : undefined
 
   /** Veredicto de envío: 'si' se manda · 'no' no hay permiso (se cuenta como
-   *  omitido) · 'demo' es dato de demostración del dispositivo (no se cuenta:
-   *  no es un fallo, nunca fue para el servidor). */
-  type Verdict = 'si' | 'no' | 'demo'
+   *  omitido) · 'demo' es dato de demostración del dispositivo y 'lectura' es
+   *  un registro de un equipo donde este usuario solo lee (ninguno de los dos
+   *  se cuenta: no son fallos, nunca fueron para el servidor). */
+  type Verdict = 'si' | 'no' | 'demo' | 'lectura'
 
   /** Un registro de terreno se envía si su campaña existe, no es demo y el rol
    *  alcanza para escribir en la estructura de esa campaña. */
@@ -97,7 +107,8 @@ export async function syncNow(): Promise<SyncResult> {
     const insp = inspectionById.get(inspectionId)
     if (!insp) return 'no' // huérfano: su campaña ya no está en este dispositivo
     if (isDemoRecord(insp.id)) return 'demo'
-    return mayWork(teamId, structureOf(insp)) ? 'si' : 'no'
+    if (mayWork(teamId, structureOf(insp))) return 'si'
+    return readOnly(teamId) ? 'lectura' : 'no'
   }
 
   // ── PUSH (orden de dependencias: proyecto → estructura → inspección → …) ──
@@ -122,15 +133,16 @@ export async function syncNow(): Promise<SyncResult> {
       return v === 'si'
     })
 
-  const owned = (allowed: boolean): Verdict => (allowed ? 'si' : 'no')
+  const owned = (allowed: boolean, teamId?: string): Verdict =>
+    allowed ? 'si' : readOnly(teamId) ? 'lectura' : 'no'
 
   await pushAll(
     'projects',
-    sendable(await db.projects.toArray(), (p) => owned(mayManage(p.teamId))).map((p) =>
+    sendable(await db.projects.toArray(), (p) => owned(mayManage(p.teamId), p.teamId)).map((p) =>
       M.projectToRemote(p, me),
     ),
   )
-  const pushableStructures = sendable(localStructures, (s) => owned(mayManage(s.teamId)))
+  const pushableStructures = sendable(localStructures, (s) => owned(mayManage(s.teamId), s.teamId))
   await pushAll('structures', pushableStructures.map((s) => M.structureToRemote(s, me)))
 
   // ── GEMELOS 3D: subir el archivo del modelo importado ──
@@ -158,7 +170,7 @@ export async function syncNow(): Promise<SyncResult> {
   await pushAll(
     'inspections',
     sendable(localInspections, (i) =>
-      owned(mayWork(i.teamId, structureById.get(i.structureId))),
+      owned(mayWork(i.teamId, structureById.get(i.structureId)), i.teamId),
     ).map((i) => M.inspectionToRemote(i, me)),
   )
   const pushableFindings = sendable(localFindings, (f) => workItemVerdict(f.inspectionId, f.teamId))

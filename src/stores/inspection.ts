@@ -279,6 +279,48 @@ export const useInspectionStore = defineStore('inspection', () => {
   /** Lo mismo, para la estructura activa (lo que consume la interfaz). */
   const canWorkHere = computed(() => canWorkOnStructure(selectedStructureId.value))
 
+  // ── Alcance de lectura: qué proyectos ve este usuario ──
+  //
+  // El rol `cliente` es de solo lectura, pero eso no dice CUÁNTO lee. Un equipo
+  // que atiende a varios mandantes no puede mostrarle a cada uno el trabajo de
+  // los demás, así que el cliente ve únicamente los proyectos en los que está
+  // asignado (`Project.clientIds`, que administra el admin). Los demás roles
+  // ven todo lo del equipo, como hasta ahora.
+  //
+  // Esto es el reflejo de las reglas del servidor —que son las que mandan y ya
+  // filtran el pull—, y hace falta igual por dos motivos: un dispositivo puede
+  // conservar en Dexie datos de cuando esa persona sí tenía acceso (el pull
+  // trae, no poda), y en modo local no hay servidor que filtre nada.
+  const clientScoped = computed(() => myRole.value === 'cliente')
+
+  const visibleProjects = computed<Project[]>(() => {
+    if (!clientScoped.value) return projects.value
+    const me = authUser.value?.id
+    // Los registros sin equipo son de este dispositivo (modo local, siembra de
+    // ejemplo): no son de nadie más y se siguen viendo.
+    return projects.value.filter((p) => !p.teamId || (!!me && !!p.clientIds?.includes(me)))
+  })
+  const visibleStructures = computed<Structure[]>(() => {
+    if (!clientScoped.value) return structures.value
+    const ids = new Set(visibleProjects.value.map((p) => p.id))
+    return structures.value.filter((s) => ids.has(s.projectId))
+  })
+  const visibleInspections = computed<Inspection[]>(() => {
+    if (!clientScoped.value) return inspections.value
+    const ids = new Set(visibleStructures.value.map((s) => s.id))
+    return inspections.value.filter((i) => ids.has(i.structureId))
+  })
+  const visibleFindings = computed<Finding[]>(() => {
+    if (!clientScoped.value) return findings.value
+    const ids = new Set(visibleInspections.value.map((i) => i.id))
+    return findings.value.filter((f) => ids.has(f.inspectionId))
+  })
+  const visibleTests = computed<Test[]>(() => {
+    if (!clientScoped.value) return tests.value
+    const ids = new Set(visibleInspections.value.map((i) => i.id))
+    return tests.value.filter((t) => ids.has(t.inspectionId))
+  })
+
   /** Estructura a la que pertenece una campaña (para validar hallazgos/ensayos). */
   function structureOfInspection(inspectionId?: string): string | undefined {
     return inspections.value.find((i) => i.id === inspectionId)?.structureId
@@ -392,8 +434,8 @@ export const useInspectionStore = defineStore('inspection', () => {
    * hay trabajo de verdad, aterrizar en la demo hace parecer que no llegó.
    */
   function focusInitialStructure() {
-    const real = structures.value.find((s) => !isDemoRecord(s.id))
-    selectedStructureId.value = real?.id ?? structures.value[0]?.id ?? null
+    const real = visibleStructures.value.find((s) => !isDemoRecord(s.id))
+    selectedStructureId.value = real?.id ?? visibleStructures.value[0]?.id ?? null
     inspectionIndex.value = Math.max(0, structureInspections.value.length - 1)
   }
 
@@ -414,12 +456,12 @@ export const useInspectionStore = defineStore('inspection', () => {
 
   // ── Getters ────────────────────────────────────────────
   const activeStructure = computed<Structure | null>(
-    () => structures.value.find((s) => s.id === selectedStructureId.value) ?? null,
+    () => visibleStructures.value.find((s) => s.id === selectedStructureId.value) ?? null,
   )
 
   /** Proyecto de la estructura activa. */
   const activeProject = computed<Project | null>(
-    () => projects.value.find((p) => p.id === activeStructure.value?.projectId) ?? null,
+    () => visibleProjects.value.find((p) => p.id === activeStructure.value?.projectId) ?? null,
   )
 
   /** ¿La estructura activa tiene modelo 3D? Si no, el gemelo no aplica. */
@@ -769,8 +811,8 @@ export const useInspectionStore = defineStore('inspection', () => {
     try {
       const res = await runSync()
       await reload()
-      if (!structures.value.find((s) => s.id === selectedStructureId.value)) {
-        selectedStructureId.value = structures.value[0]?.id ?? null
+      if (!visibleStructures.value.find((s) => s.id === selectedStructureId.value)) {
+        selectedStructureId.value = visibleStructures.value[0]?.id ?? null
       }
       inspectionIndex.value = Math.min(inspectionIndex.value, Math.max(0, structureInspections.value.length - 1))
       lastSyncAt.value = new Date().toISOString()
@@ -865,6 +907,10 @@ export const useInspectionStore = defineStore('inspection', () => {
    */
   async function removeStoredPhotos(findingId: string, remoteNames: string[]) {
     if (!remoteNames.length) return
+    const f = findings.value.find((x) => x.id === findingId)
+    if (f && !canWorkOnStructure(structureOfInspection(f.inspectionId))) {
+      throw new Error('Tu rol no permite borrar fotos de este hallazgo.')
+    }
     await trashPhotos(findingId, remoteNames)
     if (await backend.isReachable()) await syncNow().catch(() => {})
   }
@@ -906,6 +952,11 @@ export const useInspectionStore = defineStore('inspection', () => {
 
   /** Fija la clase de una irregularidad (0/1/2) en la estructura activa y persiste. */
   async function setIrregularity(id: string, cls: number) {
+    // Vulnerabilidad y sitio son campos de la ESTRUCTURA, y la estructura solo
+    // la escribe el administrador (regla del servidor). Sin esta guarda, un
+    // revisor o un cliente los editaba en pantalla y el cambio se quedaba en su
+    // dispositivo para siempre: el servidor rechaza el push en silencio.
+    if (!can('manage_projects')) throw new Error('Tu rol no permite editar la estructura.')
     const s = activeStructure.value
     if (!s) return
     const v: Record<string, number> = { ...(s.vulnerability ?? {}) }
@@ -917,6 +968,7 @@ export const useInspectionStore = defineStore('inspection', () => {
 
   /** Actualiza la configuración de sitio (amenaza sísmica) de la estructura activa. */
   async function setSite(patch: Partial<SiteConfig>) {
+    if (!can('manage_projects')) throw new Error('Tu rol no permite editar la estructura.')
     const s = activeStructure.value
     if (!s) return
     s.site = { ...(s.site ?? {}), ...patch }
@@ -955,8 +1007,8 @@ export const useInspectionStore = defineStore('inspection', () => {
     await db.projects.bulkDelete([...demoProjects])
 
     await reload()
-    if (!structures.value.find((s) => s.id === selectedStructureId.value)) {
-      selectedStructureId.value = structures.value[0]?.id ?? null
+    if (!visibleStructures.value.find((s) => s.id === selectedStructureId.value)) {
+      selectedStructureId.value = visibleStructures.value[0]?.id ?? null
       selectedElementId.value = null
     }
     inspectionIndex.value = Math.max(0, structureInspections.value.length - 1)
@@ -977,6 +1029,7 @@ export const useInspectionStore = defineStore('inspection', () => {
     return p
   }
   async function updateProject(id: string, patch: Partial<Project>) {
+    if (!can('manage_projects')) throw new Error('Tu rol no permite editar proyectos.')
     const p = projects.value.find((x) => x.id === id)
     if (!p) return
     Object.assign(p, patch)
@@ -1012,6 +1065,7 @@ export const useInspectionStore = defineStore('inspection', () => {
     return s
   }
   async function updateStructure(id: string, patch: Partial<Structure>) {
+    if (!can('manage_projects')) throw new Error('Tu rol no permite editar estructuras.')
     const s = structures.value.find((x) => x.id === id)
     if (!s) return
     Object.assign(s, patch)
@@ -1025,6 +1079,21 @@ export const useInspectionStore = defineStore('inspection', () => {
     if (!s) return
     s.inspectorIds = [...userIds]
     await db.structures.put(plain(s))
+  }
+
+  /**
+   * Asigna los clientes que pueden VER un proyecto (solo admin).
+   *
+   * Al revés que `assignInspectors`, la lista vacía no abre nada: cierra el
+   * proyecto a todos los clientes. Es lo que impide que un cliente vea el
+   * trabajo hecho para otro mandante del mismo equipo.
+   */
+  async function assignClients(projectId: string, userIds: string[]) {
+    if (!can('manage_projects')) throw new Error('Solo un administrador asigna clientes.')
+    const p = projects.value.find((x) => x.id === projectId)
+    if (!p) return
+    p.clientIds = [...userIds]
+    await db.projects.put(plain(p))
   }
 
   // ── Gemelo 3D: pórtico paramétrico o modelo importado ──
@@ -1234,11 +1303,14 @@ export const useInspectionStore = defineStore('inspection', () => {
 
   return {
     // estado
-    projects,
-    structures,
-    inspections,
-    findings,
-    tests,
+    // Ojo: hacia afuera del store, las cinco colecciones son las VISIBLES para
+    // el rol de este usuario (ver `visibleProjects`). Adentro se sigue
+    // trabajando con las tablas completas de Dexie.
+    projects: visibleProjects,
+    structures: visibleStructures,
+    inspections: visibleInspections,
+    findings: visibleFindings,
+    tests: visibleTests,
     ready,
     activeView,
     selectedStructureId,
@@ -1316,6 +1388,7 @@ export const useInspectionStore = defineStore('inspection', () => {
     can,
     canWorkOnStructure,
     assignInspectors,
+    assignClients,
     loadTeams,
     selectTeam,
     createTeam,

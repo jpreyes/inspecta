@@ -152,6 +152,12 @@ export interface Project {
   createdAt: string
   /** Equipo dueño. Vacío = registro personal (modo local, sin servidor). */
   teamId?: string
+  /** Clientes (ids de usuario) con acceso de lectura a ESTE proyecto. A
+   *  diferencia de `structures.inspectorIds`, la lista vacía NO abre el
+   *  proyecto a todos los clientes del equipo: lo cierra. Un cliente solo ve
+   *  los proyectos en los que está asignado. `undefined` = esta copia local es
+   *  anterior al campo y no sabe nada de él (ver mappers: no se envía). */
+  clientIds?: string[]
 }
 
 /** Quién registró algo. `authorName` se guarda denormalizado para que el

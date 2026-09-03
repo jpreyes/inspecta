@@ -23,7 +23,7 @@ const rel = (id?: string) => id ?? ''
 // ── local → remoto (para push) ──────────────────────────────
 
 export function projectToRemote(p: Project, owner: string): Remote {
-  return {
+  const r: Remote = {
     id: p.id,
     name: p.name,
     client: p.client ?? '',
@@ -33,10 +33,17 @@ export function projectToRemote(p: Project, owner: string): Remote {
     team: rel(p.teamId),
     owner,
   }
+  // La lista de clientes con acceso solo viaja si este dispositivo la conoce.
+  // `undefined` es una copia local anterior al campo: mandar [] le borraría al
+  // proyecto sus asignaciones (la misma trampa que `team`, y con la misma
+  // consecuencia — el cliente deja de ver su proyecto sin que nadie lo note).
+  // Una lista VACÍA sí se manda: es la forma de revocar el acceso.
+  if (p.clientIds) r.clients = p.clientIds
+  return r
 }
 
 export function structureToRemote(s: Structure, owner: string): Remote {
-  return {
+  const r: Remote = {
     id: s.id,
     project: s.projectId,
     name: s.name,
@@ -49,9 +56,13 @@ export function structureToRemote(s: Structure, owner: string): Remote {
     // `uploadModel`, igual que las fotos de los hallazgos.
     model_meta: s.model ? { ...s.model, remoteName: undefined } : null,
     team: rel(s.teamId),
-    inspectors: s.inspectorIds ?? [],
     owner,
   }
+  // Igual que `clients` en el proyecto: si esta copia local no conoce la
+  // asignación, no se manda (mandar [] la borraría). Vacía y conocida sí,
+  // que es como se vuelve a abrir la estructura a todo el equipo.
+  if (s.inspectorIds) r.inspectors = s.inspectorIds
+  return r
 }
 
 export function inspectionToRemote(i: Inspection, owner: string, conditionScore?: number): Remote {
@@ -128,6 +139,7 @@ export function projectFromRemote(r: any): Project {
     location: hasLoc ? { lat: r.lat ?? 0, lng: r.lng ?? 0, address: r.address || undefined } : undefined,
     createdAt: r.created,
     teamId: r.team || undefined,
+    clientIds: Array.isArray(r.clients) ? r.clients : r.clients ? [r.clients] : [],
   }
 }
 
